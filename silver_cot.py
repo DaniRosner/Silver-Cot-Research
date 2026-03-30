@@ -1,0 +1,166 @@
+"""
+Silver COT Analysis
+--------------------
+Downloads CFTC Disaggregated COT data for Silver (COMEX, code 084691),
+extracts Managed Money (speculators) vs Commercial (hedgers) net positions,
+fetches Silver spot price via Yahoo Finance, and plots them side-by-side.
+
+Requirements:
+    pip install pandas requests yfinance matplotlib
+"""
+
+import io
+import zipfile
+import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import yfinance as yf
+from datetime import datetime
+
+# ── CONFIG ──────────────────────────────────────────────────────────────────
+SILVER_CODE  = 84          # COMEX Silver contract code
+START_YEAR   = 2020              # First year to pull
+END_YEAR     = datetime.now().year
+PRICE_TICKER = "SI=F"           # Yahoo Finance: Silver front-month futures
+
+# CFTC column names we care about (Disaggregated Futures-Only report)
+COLS = {
+    "date"       : "Report_Date_as_YYYY-MM-DD",
+    "speculator_long"  : "M_Money_Positions_Long_All",   # Managed Money long
+    "speculator_short" : "M_Money_Positions_Short_All",  # Managed Money short
+    "commercial_long"  : "Prod_Merc_Positions_Long_All", # Commercial long
+    "commercial_short" : "Prod_Merc_Positions_Short_All",# Commercial short
+    "open_int"   : "Open_Interest_All",
+    "code"       : "CFTC_Commodity_Code",
+}
+
+# ── DOWNLOAD & PARSE COT DATA:  ────────────────────────────────────────────────
+# Download every year, filter to Silver only, stack it all together, calculate net positions, and return a clean table
+def fetch_cot_year(year: int) -> pd.DataFrame:
+    url = f"https://www.cftc.gov/files/dea/history/fut_disagg_txt_{year}.zip"
+    print(f"  Downloading {year}...", end=" ")
+    r = requests.get(url, timeout=30)
+    r.raise_for_status()
+    with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+        # The zip contains one .txt (CSV) file
+        name = [n for n in z.namelist() if n.endswith(".txt")][0]
+        with z.open(name) as f:
+            df = pd.read_csv(f, low_memory=False)
+    print(f"rows={len(df):,}")
+    return df
+
+def load_silver_cot(start_year: int, end_year: int) -> pd.DataFrame:
+    frames = []
+    for yr in range(start_year, end_year + 1):
+        try:
+            df = fetch_cot_year(yr)
+            silver = df[df[COLS["code"]] == SILVER_CODE].copy()
+            frames.append(silver)
+        except Exception as e:
+            print(f"  Warning: could not load {yr}: {e}")
+
+    cot = pd.concat(frames, ignore_index=True)
+    cot[COLS["date"]] = pd.to_datetime(cot[COLS["date"]])
+    cot = cot.sort_values(COLS["date"]).drop_duplicates(COLS["date"])
+
+    # Derived columns
+    cot["spec_net"]  = cot[COLS["speculator_long"]]  - cot[COLS["speculator_short"]]
+    cot["hedger_net"]= cot[COLS["commercial_long"]]  - cot[COLS["commercial_short"]]
+    cot["date"]      = cot[COLS["date"]]
+
+    return cot[["date", "spec_net", "hedger_net",
+                COLS["speculator_long"], COLS["speculator_short"],
+                COLS["commercial_long"], COLS["commercial_short"],
+                COLS["open_int"]]]
+
+# ── FETCH SILVER PRICE──────────────────────────────────────────────────────
+# Download Silver's price history from Yahoo Finance and return it as a clean two-column table of date and price
+def fetch_silver_price(start: str, end: str) -> pd.DataFrame:
+    print("Fetching silver price from Yahoo Finance...")
+    price = yf.download(PRICE_TICKER, start=start, end=end, auto_adjust=True, progress=False)
+    price = price[["Close"]].rename(columns={"Close": "price"})
+    price.index = pd.to_datetime(price.index)
+    return price
+
+# ── PLOT ─────────────────────────────────────────────────────────────────────
+def plot(cot: pd.DataFrame, price: pd.DataFrame):
+    fig, axes = plt.subplots(3, 1, figsize=(14, 11), sharex=True)
+    fig.suptitle("Silver (COMEX): Speculators vs Hedgers vs Price", fontsize=15, fontweight="bold")
+
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a"}
+
+    # ── Panel 1: Silver Price ────────────────────────────────────────────────
+    ax1 = axes[0]
+    ax1.plot(price.index, price["price"], color=colors["price"], linewidth=1.5)
+    ax1.set_ylabel("Silver Price (USD)", fontsize=10)
+    ax1.set_title("Silver Spot Price", fontsize=11)
+    ax1.grid(True, alpha=0.3)
+    ax1.fill_between(price.index, price["price"].squeeze(), alpha=0.1, color=colors["price"])
+
+    # ── Panel 2: Net Positions (Speculators vs Hedgers) ──────────────────────
+    ax2 = axes[1]
+    ax2.plot(cot["date"], cot["spec_net"],   color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators) Net")
+    ax2.plot(cot["date"], cot["hedger_net"], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers) Net")
+    ax2.axhline(0, color="black", linewidth=0.7, linestyle="--")
+    ax2.set_ylabel("Net Contracts", fontsize=10)
+    ax2.set_title("Net Positioning: Speculators vs Hedgers", fontsize=11)
+    ax2.legend(fontsize=9)
+    ax2.grid(True, alpha=0.3)
+    ax2.fill_between(cot["date"], cot["spec_net"], 0,
+                     where=(cot["spec_net"] > 0), alpha=0.12, color=colors["spec"])
+    ax2.fill_between(cot["date"], cot["spec_net"], 0,
+                     where=(cot["spec_net"] < 0), alpha=0.12, color="red")
+
+    # ── Panel 3: Speculator Share of Open Interest ───────────────────────────
+    cot["spec_share"] = (cot[COLS["speculator_long"]] + cot[COLS["speculator_short"]]) / cot[COLS["open_int"]] * 100
+    ax3 = axes[2]
+    ax3.bar(cot["date"], cot["spec_share"], width=5, color=colors["spec"], alpha=0.7, label="Speculator Share %")
+    ax3.set_ylabel("% of Open Interest", fontsize=10)
+    ax3.set_title("Speculator Share of Total Open Interest", fontsize=11)
+    ax3.legend(fontsize=9)
+    ax3.grid(True, alpha=0.3)
+    ax3.set_xlabel("Date", fontsize=10)
+
+    # ── Format X axis ────────────────────────────────────────────────────────
+    ax3.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+    ax3.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+    fig.autofmt_xdate(rotation=45)
+
+    plt.tight_layout()
+    out_path = "silver_cot_chart.png"
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"Chart saved → {out_path}")
+    plt.show()
+
+# ── EXPORT CSV ───────────────────────────────────────────────────────────────
+def export_csv(cot: pd.DataFrame, price: pd.DataFrame):
+    price_reset = price.reset_index()
+    price_reset.columns = [col[0] if isinstance(col, tuple) else col for col in price_reset.columns]
+    price_reset = price_reset.rename(columns={"Date": "date", "Close": "price"})
+    price_reset["date"] = pd.to_datetime(price_reset["date"]).astype("datetime64[us]")
+    cot = cot.copy()
+    cot["date"] = cot["date"].astype("datetime64[us]")
+    
+    merged = pd.merge_asof(
+        cot.sort_values("date"),
+        price_reset[["date", "price"]].sort_values("date"),
+        on="date",
+        direction="nearest"
+    )
+    merged.to_csv("silver_cot_data.csv", index=False)
+    print(f"Data exported → silver_cot_data.csv  ({len(merged)} rows)")
+
+# ── MAIN ─────────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    print(f"Loading COT data {START_YEAR}–{END_YEAR}...")
+    cot = load_silver_cot(START_YEAR, END_YEAR)
+    print(f"COT rows loaded: {len(cot)}  |  Date range: {cot['date'].min().date()} → {cot['date'].max().date()}")
+
+    price = fetch_silver_price(
+        start=str(cot["date"].min().date()),
+        end=str(datetime.now().date())
+    )
+
+    export_csv(cot, price)
+    plot(cot, price)
