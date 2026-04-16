@@ -26,13 +26,15 @@ PRICE_TICKER = "SI=F"           # Yahoo Finance: Silver front-month futures
 
 # CFTC column names we care about (Disaggregated Futures-Only report)
 COLS = {
-    "date"       : "Report_Date_as_YYYY-MM-DD",
-    "speculator_long"  : "M_Money_Positions_Long_All",   # Managed Money long
-    "speculator_short" : "M_Money_Positions_Short_All",  # Managed Money short
-    "commercial_long"  : "Prod_Merc_Positions_Long_All", # Commercial long
-    "commercial_short" : "Prod_Merc_Positions_Short_All",# Commercial short
-    "open_int"   : "Open_Interest_All",
-    "code"       : "CFTC_Commodity_Code",
+    "date"             : "Report_Date_as_YYYY-MM-DD",
+    "speculator_long"  : "M_Money_Positions_Long_All",
+    "speculator_short" : "M_Money_Positions_Short_All",
+    "commercial_long"  : "Prod_Merc_Positions_Long_All",
+    "commercial_short" : "Prod_Merc_Positions_Short_All",
+    "swap_long"        : "Swap_Positions_Long_All",
+    "swap_short"       : "Swap__Positions_Short_All",
+    "open_int"         : "Open_Interest_All",
+    "code"             : "CFTC_Commodity_Code",
 }
 
 # ── DOWNLOAD & PARSE COT DATA:  ────────────────────────────────────────────────
@@ -67,12 +69,13 @@ def load_silver_cot(start_year: int, end_year: int) -> pd.DataFrame:
     # Derived columns
     cot["spec_net"]  = cot[COLS["speculator_long"]]  - cot[COLS["speculator_short"]]
     cot["hedger_net"]= cot[COLS["commercial_long"]]  - cot[COLS["commercial_short"]]
+    cot["swap_net"]  = cot[COLS["swap_long"]]        - cot[COLS["swap_short"]]
     cot["date"]      = cot[COLS["date"]]
 
-    return cot[["date", "spec_net", "hedger_net",
-                COLS["speculator_long"], COLS["speculator_short"],
-                COLS["commercial_long"], COLS["commercial_short"],
-                COLS["open_int"]]]
+    return cot[["date", "spec_net", "hedger_net", "swap_net",
+            COLS["speculator_long"], COLS["speculator_short"],
+            COLS["commercial_long"], COLS["commercial_short"],
+            COLS["open_int"]]]
 
 # ── FETCH SILVER PRICE──────────────────────────────────────────────────────
 # Download Silver's price history from Yahoo Finance and return it as a clean two-column table of date and price
@@ -88,7 +91,7 @@ def plot(cot: pd.DataFrame, price: pd.DataFrame):
     fig, axes = plt.subplots(3, 1, figsize=(14, 11), sharex=True)
     fig.suptitle("Silver (COMEX): Speculators vs Hedgers vs Price", fontsize=15, fontweight="bold")
 
-    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a"}
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
 
     # ── Panel 1: Silver Price ────────────────────────────────────────────────
     ax1 = axes[0]
@@ -98,13 +101,14 @@ def plot(cot: pd.DataFrame, price: pd.DataFrame):
     ax1.grid(True, alpha=0.3)
     ax1.fill_between(price.index, price["price"].squeeze(), alpha=0.1, color=colors["price"])
 
-    # ── Panel 2: Net Positions (Speculators vs Hedgers) ──────────────────────
+    # ── Panel 2: Net Positions (Speculators vs Hedgers vs Swap Dealers) ──────────────────────
     ax2 = axes[1]
     ax2.plot(cot["date"], cot["spec_net"],   color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators) Net")
     ax2.plot(cot["date"], cot["hedger_net"], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers) Net")
+    ax2.plot(cot["date"], cot["swap_net"],   color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks) Net")
     ax2.axhline(0, color="black", linewidth=0.7, linestyle="--")
     ax2.set_ylabel("Net Contracts", fontsize=10)
-    ax2.set_title("Net Positioning: Speculators vs Hedgers", fontsize=11)
+    ax2.set_title("Net Positioning: Speculators vs Hedgers vs Swap Dealers", fontsize=11)
     ax2.legend(fontsize=9)
     ax2.grid(True, alpha=0.3)
     ax2.fill_between(cot["date"], cot["spec_net"], 0,
@@ -151,10 +155,57 @@ def export_csv(cot: pd.DataFrame, price: pd.DataFrame):
     merged.to_csv("silver_cot_data.csv", index=False)
     print(f"Data exported → silver_cot_data.csv  ({len(merged)} rows)")
 
+
+# ── VALIDATE ─────────────────────────────────────────────────────────────────
+def validate(cot: pd.DataFrame):
+    print("\n── Validation Report ──────────────────────────────────────────")
+    
+    # Check 1: Net positions sum to near zero
+    cot["total_net"] = cot["spec_net"] + cot["hedger_net"] + cot["swap_net"]
+    max_imbalance = cot["total_net"].abs().max()
+    mean_imbalance = cot["total_net"].abs().mean()
+    print(f"Check 1 - Net positions sum to zero:")
+    print(f"  Max imbalance:  {max_imbalance:,.0f} contracts")
+    print(f"  Mean imbalance: {mean_imbalance:,.0f} contracts")
+    if mean_imbalance < 5000:
+        print("  ✓ PASS")
+    else:
+        print("  ✗ FAIL - imbalance too large")
+
+    # Check 2: Net positions never exceed open interest
+    max_spec  = cot["spec_net"].abs().max()
+    max_hedge = cot["hedger_net"].abs().max()
+    max_swap  = cot["swap_net"].abs().max()
+    oi_min    = cot[COLS["open_int"]].min()
+    print(f"\nCheck 2 - Net positions don't exceed open interest:")
+    print(f"  Max speculator net:  {max_spec:,.0f}")
+    print(f"  Max hedger net:      {max_hedge:,.0f}")
+    print(f"  Max swap dealer net: {max_swap:,.0f}")
+    print(f"  Min open interest:   {oi_min:,.0f}")
+    if max_spec < oi_min and max_hedge < oi_min and max_swap < oi_min:
+        print("  ✓ PASS")
+    else:
+        print("  ✗ FAIL - a net position exceeds open interest")
+
+    # Check 3: No missing dates (gaps larger than 14 days)
+    cot_sorted = cot.sort_values("date")
+    gaps = cot_sorted["date"].diff().dt.days.dropna()
+    max_gap = gaps.max()
+    print(f"\nCheck 3 - No large gaps in data:")
+    print(f"  Largest gap between reports: {max_gap:.0f} days")
+    if max_gap <= 14:
+        print("  ✓ PASS")
+    else:
+        print(f"  ✗ FAIL - gap of {max_gap:.0f} days detected")
+
+    print("───────────────────────────────────────────────────────────────\n")
+
+
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print(f"Loading COT data {START_YEAR}–{END_YEAR}...")
     cot = load_silver_cot(START_YEAR, END_YEAR)
+    validate(cot)
     print(f"COT rows loaded: {len(cot)}  |  Date range: {cot['date'].min().date()} → {cot['date'].max().date()}")
 
     price = fetch_silver_price(
