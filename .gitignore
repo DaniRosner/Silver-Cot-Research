@@ -1,0 +1,6 @@
+silver-cot-env/
+.vscode/
+*.png
+*.csv
+__pycache__/
+*.pyc
