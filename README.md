@@ -70,3 +70,15 @@ it the natural starting point for this research.
   exports CSV, and generates charts
 - `silver_cot_data.csv` — Generated output (not tracked in Git)
 - `silver_cot_chart.png` — Generated chart (not tracked in Git)
+
+## Findings
+
+### January 27, 2026 — Open Interest Anomaly
+On the week of January 27, 2026, total open interest dropped sharply to ~36,200 
+contracts — roughly one-quarter of the typical 130,000–150,000 range. Rather than 
+a data error, this likely reflects the climax of the silver short squeeze that 
+drove prices to ~$120. Possible drivers include mass margin calls as brokers raised 
+requirements during extreme volatility, forced liquidation of leveraged positions, 
+and the resolution of the short squeeze as shorts covered and longs took profits 
+simultaneously. This data point is preserved in the dataset and annotated in the 
+charts.
