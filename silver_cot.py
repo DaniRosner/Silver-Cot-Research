@@ -10,6 +10,7 @@ Requirements:
 """
 
 import io
+import os
 import zipfile
 import requests
 import pandas as pd
@@ -148,8 +149,6 @@ def plot_oi(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
 
     colors = {"spec": "#e05c00", "hedge": "#0a5c91", "swap": "#8b00ff", "total": "black", "price": "#2a9d2a"}
 
-    anomaly_date = pd.Timestamp("2026-01-27")
-
     # ── Panel 1: Total Open Interest (bar) ───────────────────────────────────
     ax1 = axes[0]
     ax1.bar(cot["date"], cot[COLS["open_int"]], width=5, color=colors["total"], alpha=0.6, label="Total Open Interest")
@@ -157,17 +156,6 @@ def plot_oi(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     # Average OI reference line
     avg_oi = cot[COLS["open_int"]].mean()
     ax1.axhline(avg_oi, color="red", linewidth=1, linestyle="--", label=f"Average OI ({avg_oi:,.0f})")
-    
-    # Vertical annotation for anomaly
-    ax1.axvline(anomaly_date, color="red", linewidth=1.5, linestyle=":")
-    ax1.annotate("Jan 27 2026 — OI ~36k (squeeze climax?)",
-                 xy=(anomaly_date, 36204),
-                 xycoords=("data", "data"),
-                 xytext=(0.72, -0.15),
-                 textcoords="axes fraction",
-                 fontsize=8, color="red", ha="center",
-                 arrowprops=dict(arrowstyle="->", color="red"),
-                 annotation_clip=False)
 
     # Overlay silver price on twin axis
     ax1b = ax1.twinx()
@@ -190,7 +178,6 @@ def plot_oi(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     ax2.plot(cot["date"], cot["spec_gross"],  color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
     ax2.plot(cot["date"], cot["hedge_gross"], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
     ax2.plot(cot["date"], cot["swap_gross"],  color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
-    ax2.axvline(anomaly_date, color="red", linewidth=1.5, linestyle=":")
     ax2.set_ylabel("Contracts", fontsize=10)
     ax2.set_title("Gross Open Interest by Group\n(note: sums exceed total OI as longs & shorts are counted separately per group)", fontsize=11)
     ax2.legend(fontsize=9)
@@ -201,6 +188,64 @@ def plot_oi(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
     fig.autofmt_xdate(rotation=45)
 
+    plt.tight_layout()
+    return fig
+
+# ── PLOT ZOOM ────────────────────────────────────────────────────────────────
+def plot_zoom(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
+    # Filter to Nov 2025 – Feb 2026
+    cot_zoom  = cot[(cot["date"] >= "2025-11-01") & (cot["date"] <= "2026-02-28")].copy()
+    price_zoom = price[(price.index >= "2025-11-01") & (price.index <= "2026-02-28")]
+
+    fig, axes = plt.subplots(3, 1, figsize=(14, 14), sharex=True)
+    fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026", fontsize=15, fontweight="bold")
+
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+
+    # ── Panel 1: Silver Price (daily line) ───────────────────────────────────
+    ax1 = axes[0]
+    ax1.plot(price_zoom.index, price_zoom["price"], color=colors["price"], linewidth=1.5)
+    ax1.fill_between(price_zoom.index, price_zoom["price"].squeeze(), alpha=0.1, color=colors["price"])
+    ax1.set_ylabel("Silver Price (USD)", fontsize=10)
+    ax1.set_title("Silver Spot Price", fontsize=11)
+    ax1.grid(True, alpha=0.3)
+
+    # ── Panel 2: Net Positions (weekly dots) ─────────────────────────────────
+    ax2 = axes[1]
+    ax2.plot(cot_zoom["date"], cot_zoom["spec_net"],   color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators) Net")
+    ax2.plot(cot_zoom["date"], cot_zoom["hedger_net"], color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers) Net")
+    ax2.plot(cot_zoom["date"], cot_zoom["swap_net"],   color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks) Net")
+    ax2.axhline(0, color="black", linewidth=0.7, linestyle="--")
+    ax2.set_ylabel("Net Contracts", fontsize=10)
+    ax2.set_title("Net Positioning: Speculators vs Hedgers vs Swap Dealers (Weekly COT)", fontsize=11)
+    ax2.legend(fontsize=9, loc="upper left")
+    ax2.grid(True, alpha=0.3)
+    ax2b = ax2.twinx()
+    ax2b.plot(price_zoom.index, price_zoom["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+    ax2b.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+    ax2b.tick_params(axis="y", labelcolor=colors["price"])
+    ax2b.legend(fontsize=9, loc="upper right")
+
+    # ── Panel 3: Speculator Share (weekly dots) ───────────────────────────────
+    cot_zoom["spec_share"] = (cot_zoom[COLS["speculator_long"]] + cot_zoom[COLS["speculator_short"]]) / cot_zoom[COLS["open_int"]] * 100
+    ax3 = axes[2]
+    ax3.plot(cot_zoom["date"], cot_zoom["spec_share"], color=colors["spec"], marker="o", linestyle="None", markersize=5, label="Speculator Share %")
+    ax3.set_ylabel("% of Open Interest", fontsize=10)
+    ax3.set_title("Speculator Share of Total Open Interest (Weekly COT)", fontsize=11)
+    ax3.legend(fontsize=9, loc="upper left")
+    ax3.grid(True, alpha=0.3)
+    ax3b = ax3.twinx()
+    ax3b.plot(price_zoom.index, price_zoom["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+    ax3b.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+    ax3b.tick_params(axis="y", labelcolor=colors["price"])
+    ax3b.legend(fontsize=9, loc="upper right")
+
+    # ── Format X axis ────────────────────────────────────────────────────────
+    ax3.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    ax3.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+    ax3.set_xlabel("Date", fontsize=10)
+
+    fig.autofmt_xdate(rotation=45)
     plt.tight_layout()
     return fig
 
@@ -267,6 +312,12 @@ def validate(cot: pd.DataFrame):
 
     print("───────────────────────────────────────────────────────────────\n")
 
+# ── VERSION OUTPUT FILE ───────────────────────────────────────────────────────
+def get_versioned_filename(base: str, ext: str) -> str:
+    version = 1
+    while os.path.exists(f"{base}_v{version}.{ext}"):
+        version += 1
+    return f"{base}_v{version}.{ext}"
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -281,7 +332,9 @@ if __name__ == "__main__":
     )
 
     export_csv(cot, price)
-    with PdfPages("silver_cot_charts.pdf") as pdf:
+    out_path = get_versioned_filename("silver_cot_charts", "pdf")
+    with PdfPages(out_path) as pdf:
         pdf.savefig(plot_main(cot, price), bbox_inches="tight")
         pdf.savefig(plot_oi(cot, price), bbox_inches="tight")
-        print("Charts saved → silver_cot_charts.pdf")
+        pdf.savefig(plot_zoom(cot, price), bbox_inches="tight")
+        print(f"Charts saved → {out_path}")
