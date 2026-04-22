@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import yfinance as yf
 from datetime import datetime
+from matplotlib.backends.backend_pdf import PdfPages
 
 # ── CONFIG ──────────────────────────────────────────────────────────────────
 SILVER_CODE  = 84          # COMEX Silver contract code
@@ -35,6 +36,7 @@ COLS = {
     "swap_short"       : "Swap__Positions_Short_All",
     "open_int"         : "Open_Interest_All",
     "code"             : "CFTC_Commodity_Code",
+    "market_name" : "Market_and_Exchange_Names",
 }
 
 # ── DOWNLOAD & PARSE COT DATA:  ────────────────────────────────────────────────
@@ -57,7 +59,10 @@ def load_silver_cot(start_year: int, end_year: int) -> pd.DataFrame:
     for yr in range(start_year, end_year + 1):
         try:
             df = fetch_cot_year(yr)
-            silver = df[df[COLS["code"]] == SILVER_CODE].copy()
+            silver = df[
+                (df[COLS["code"]] == SILVER_CODE) & 
+                (df[COLS["market_name"]] == "SILVER - COMMODITY EXCHANGE INC.")
+            ].copy()
             frames.append(silver)
         except Exception as e:
             print(f"  Warning: could not load {yr}: {e}")
@@ -75,6 +80,7 @@ def load_silver_cot(start_year: int, end_year: int) -> pd.DataFrame:
     return cot[["date", "spec_net", "hedger_net", "swap_net",
             COLS["speculator_long"], COLS["speculator_short"],
             COLS["commercial_long"], COLS["commercial_short"],
+            COLS["swap_long"], COLS["swap_short"],
             COLS["open_int"]]]
 
 # ── FETCH SILVER PRICE──────────────────────────────────────────────────────
@@ -87,8 +93,8 @@ def fetch_silver_price(start: str, end: str) -> pd.DataFrame:
     return price
 
 # ── PLOT ─────────────────────────────────────────────────────────────────────
-def plot(cot: pd.DataFrame, price: pd.DataFrame):
-    fig, axes = plt.subplots(3, 1, figsize=(14, 11), sharex=True)
+def plot_main(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
+    fig, axes = plt.subplots(3, 1, figsize=(14, 14), sharex=True)
     fig.suptitle("Silver (COMEX): Speculators vs Hedgers vs Price", fontsize=15, fontweight="bold")
 
     colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
@@ -129,13 +135,74 @@ def plot(cot: pd.DataFrame, price: pd.DataFrame):
     # ── Format X axis ────────────────────────────────────────────────────────
     ax3.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
     ax3.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+    ax3.set_xlabel("Date", fontsize=10)
+
+    fig.autofmt_xdate(rotation=45)
+    plt.tight_layout()
+    return fig
+
+# ── PLOT OI ──────────────────────────────────────────────────────────────────
+def plot_oi(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
+    fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+    fig.suptitle("Silver (COMEX): Open Interest Analysis", fontsize=15, fontweight="bold")
+
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "swap": "#8b00ff", "total": "black", "price": "#2a9d2a"}
+
+    anomaly_date = pd.Timestamp("2026-01-27")
+
+    # ── Panel 1: Total Open Interest (bar) ───────────────────────────────────
+    ax1 = axes[0]
+    ax1.bar(cot["date"], cot[COLS["open_int"]], width=5, color=colors["total"], alpha=0.6, label="Total Open Interest")
+    
+    # Average OI reference line
+    avg_oi = cot[COLS["open_int"]].mean()
+    ax1.axhline(avg_oi, color="red", linewidth=1, linestyle="--", label=f"Average OI ({avg_oi:,.0f})")
+    
+    # Vertical annotation for anomaly
+    ax1.axvline(anomaly_date, color="red", linewidth=1.5, linestyle=":")
+    ax1.annotate("Jan 27 2026 — OI ~36k (squeeze climax?)",
+                 xy=(anomaly_date, 36204),
+                 xycoords=("data", "data"),
+                 xytext=(0.72, -0.15),
+                 textcoords="axes fraction",
+                 fontsize=8, color="red", ha="center",
+                 arrowprops=dict(arrowstyle="->", color="red"),
+                 annotation_clip=False)
+
+    # Overlay silver price on twin axis
+    ax1b = ax1.twinx()
+    ax1b.plot(price.index, price["price"], color=colors["price"], linewidth=1.2, alpha=0.6, label="Silver Price")
+    ax1b.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+    ax1b.tick_params(axis="y", labelcolor=colors["price"])
+
+    ax1.set_ylabel("Contracts", fontsize=10)
+    ax1.set_title("Total Open Interest vs Silver Price", fontsize=11)
+    ax1.legend(fontsize=9, loc="upper left")
+    ax1b.legend(fontsize=9, loc="upper right")
+    ax1.grid(True, alpha=0.3)
+
+    # ── Panel 2: Gross OI by Group (line) ────────────────────────────────────
+    cot["spec_gross"]  = cot[COLS["speculator_long"]]  + cot[COLS["speculator_short"]]
+    cot["hedge_gross"] = cot[COLS["commercial_long"]]  + cot[COLS["commercial_short"]]
+    cot["swap_gross"]  = cot[COLS["swap_long"]]        + cot[COLS["swap_short"]]
+
+    ax2 = axes[1]
+    ax2.plot(cot["date"], cot["spec_gross"],  color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
+    ax2.plot(cot["date"], cot["hedge_gross"], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
+    ax2.plot(cot["date"], cot["swap_gross"],  color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax2.axvline(anomaly_date, color="red", linewidth=1.5, linestyle=":")
+    ax2.set_ylabel("Contracts", fontsize=10)
+    ax2.set_title("Gross Open Interest by Group\n(note: sums exceed total OI as longs & shorts are counted separately per group)", fontsize=11)
+    ax2.legend(fontsize=9)
+    ax2.grid(True, alpha=0.3)
+    ax2.set_xlabel("Date", fontsize=10)
+
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+    ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
     fig.autofmt_xdate(rotation=45)
 
     plt.tight_layout()
-    out_path = "silver_cot_chart.png"
-    plt.savefig(out_path, dpi=150, bbox_inches="tight")
-    print(f"Chart saved → {out_path}")
-    plt.show()
+    return fig
 
 # ── EXPORT CSV ───────────────────────────────────────────────────────────────
 def export_csv(cot: pd.DataFrame, price: pd.DataFrame):
@@ -214,4 +281,7 @@ if __name__ == "__main__":
     )
 
     export_csv(cot, price)
-    plot(cot, price)
+    with PdfPages("silver_cot_charts.pdf") as pdf:
+        pdf.savefig(plot_main(cot, price), bbox_inches="tight")
+        pdf.savefig(plot_oi(cot, price), bbox_inches="tight")
+        print("Charts saved → silver_cot_charts.pdf")
