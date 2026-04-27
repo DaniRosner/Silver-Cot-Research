@@ -93,10 +93,10 @@ def fetch_silver_price(start: str, end: str) -> pd.DataFrame:
     price.index = pd.to_datetime(price.index)
     return price
 
-# ── PLOT ─────────────────────────────────────────────────────────────────────
+# ── PLOT MAIN ─────────────────────────────────────────────────────────────────
 def plot_main(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
-    fig, axes = plt.subplots(3, 1, figsize=(14, 14), sharex=True)
-    fig.suptitle("Silver (COMEX): Speculators vs Hedgers vs Price", fontsize=15, fontweight="bold")
+    fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+    fig.suptitle("Silver (COMEX): Speculators vs Hedgers vs Price", fontsize=15, fontweight="bold", x=0.5)
 
     colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
 
@@ -106,9 +106,11 @@ def plot_main(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     ax1.set_ylabel("Silver Price (USD)", fontsize=10)
     ax1.set_title("Silver Spot Price", fontsize=11)
     ax1.grid(True, alpha=0.3)
+    ax1.tick_params(labelbottom=True)
     ax1.fill_between(price.index, price["price"].squeeze(), alpha=0.1, color=colors["price"])
+    ax1.set_xlabel("Date", fontsize=9)
 
-    # ── Panel 2: Net Positions (Speculators vs Hedgers vs Swap Dealers) ──────────────────────
+    # ── Panel 2: Net Positions ───────────────────────────────────────────────
     ax2 = axes[1]
     ax2.plot(cot["date"], cot["spec_net"],   color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators) Net")
     ax2.plot(cot["date"], cot["hedger_net"], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers) Net")
@@ -116,137 +118,231 @@ def plot_main(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     ax2.axhline(0, color="black", linewidth=0.7, linestyle="--")
     ax2.set_ylabel("Net Contracts", fontsize=10)
     ax2.set_title("Net Positioning: Speculators vs Hedgers vs Swap Dealers", fontsize=11)
-    ax2.legend(fontsize=9)
+    ax2.legend(fontsize=9, loc="upper left")
     ax2.grid(True, alpha=0.3)
+    ax2.tick_params(labelbottom=True)
     ax2.fill_between(cot["date"], cot["spec_net"], 0,
                      where=(cot["spec_net"] > 0), alpha=0.12, color=colors["spec"])
     ax2.fill_between(cot["date"], cot["spec_net"], 0,
                      where=(cot["spec_net"] < 0), alpha=0.12, color="red")
-
-    # ── Panel 3: Speculator Share of Open Interest ───────────────────────────
-    cot["spec_share"] = (cot[COLS["speculator_long"]] + cot[COLS["speculator_short"]]) / cot[COLS["open_int"]] * 100
-    ax3 = axes[2]
-    ax3.bar(cot["date"], cot["spec_share"], width=5, color=colors["spec"], alpha=0.7, label="Speculator Share %")
-    ax3.set_ylabel("% of Open Interest", fontsize=10)
-    ax3.set_title("Speculator Share of Total Open Interest", fontsize=11)
-    ax3.legend(fontsize=9)
-    ax3.grid(True, alpha=0.3)
-    ax3.set_xlabel("Date", fontsize=10)
+    ax2b = ax2.twinx()
+    ax2b.plot(price.index, price["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+    ax2b.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+    ax2b.tick_params(axis="y", labelcolor=colors["price"])
+    ax2b.legend(fontsize=9, loc="upper right")
 
     # ── Format X axis ────────────────────────────────────────────────────────
-    ax3.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
-    ax3.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-    ax3.set_xlabel("Date", fontsize=10)
+    for ax in axes:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+        ax.set_xlabel("Date", fontsize=9)
+        ax.tick_params(axis="x", labelbottom=True, rotation=45)
 
     fig.autofmt_xdate(rotation=45)
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 0.95, 0.97])
     return fig
+
 
 # ── PLOT OI ──────────────────────────────────────────────────────────────────
 def plot_oi(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
-    fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
-    fig.suptitle("Silver (COMEX): Open Interest Analysis", fontsize=15, fontweight="bold")
+    fig, axes = plt.subplots(3, 1, figsize=(14, 14), sharex=True)
+    fig.suptitle("Silver (COMEX): Open Interest Analysis", fontsize=15, fontweight="bold", x=0.5)
 
     colors = {"spec": "#e05c00", "hedge": "#0a5c91", "swap": "#8b00ff", "total": "black", "price": "#2a9d2a"}
 
     # ── Panel 1: Total Open Interest (bar) ───────────────────────────────────
     ax1 = axes[0]
     ax1.bar(cot["date"], cot[COLS["open_int"]], width=5, color=colors["total"], alpha=0.6, label="Total Open Interest")
-    
-    # Average OI reference line
     avg_oi = cot[COLS["open_int"]].mean()
     ax1.axhline(avg_oi, color="red", linewidth=1, linestyle="--", label=f"Average OI ({avg_oi:,.0f})")
-
-    # Overlay silver price on twin axis
     ax1b = ax1.twinx()
     ax1b.plot(price.index, price["price"], color=colors["price"], linewidth=1.2, alpha=0.6, label="Silver Price")
     ax1b.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
     ax1b.tick_params(axis="y", labelcolor=colors["price"])
-
     ax1.set_ylabel("Contracts", fontsize=10)
     ax1.set_title("Total Open Interest vs Silver Price", fontsize=11)
     ax1.legend(fontsize=9, loc="upper left")
     ax1b.legend(fontsize=9, loc="upper right")
     ax1.grid(True, alpha=0.3)
+    ax1.tick_params(labelbottom=True)
 
-    # ── Panel 2: Gross OI by Group (line) ────────────────────────────────────
+    # ── Panel 2: Speculator Share ─────────────────────────────────────────────
+    cot["spec_share"] = (cot[COLS["speculator_long"]] + cot[COLS["speculator_short"]]) / cot[COLS["open_int"]] * 100
+    ax2 = axes[1]
+    ax2.bar(cot["date"], cot["spec_share"], width=5, color=colors["spec"], alpha=0.7, label="Speculator Share %")
+    ax2.set_ylabel("% of Open Interest", fontsize=10)
+    ax2.set_title("Speculator Share of Total Open Interest", fontsize=11)
+    ax2.legend(fontsize=9)
+    ax2.grid(True, alpha=0.3)
+    ax2.tick_params(labelbottom=True)
+    ax2b = ax2.twinx()
+    ax2b.plot(price.index, price["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+    ax2b.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+    ax2b.tick_params(axis="y", labelcolor=colors["price"])
+    ax2b.legend(fontsize=9, loc="upper right")
+    ax2.set_xlabel("Date", fontsize=9)
+
+    # ── Panel 3: Gross OI by Group (line)
     cot["spec_gross"]  = cot[COLS["speculator_long"]]  + cot[COLS["speculator_short"]]
     cot["hedge_gross"] = cot[COLS["commercial_long"]]  + cot[COLS["commercial_short"]]
     cot["swap_gross"]  = cot[COLS["swap_long"]]        + cot[COLS["swap_short"]]
+    ax3 = axes[2]
+    ax3.plot(cot["date"], cot["spec_gross"],  color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
+    ax3.plot(cot["date"], cot["hedge_gross"], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
+    ax3.plot(cot["date"], cot["swap_gross"],  color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax3.set_ylabel("Contracts", fontsize=10)
+    ax3.set_title("Gross Open Interest by Group\n(note: sums exceed total OI as longs & shorts are counted separately per group)", fontsize=11)
+    ax3.legend(fontsize=9)
+    ax3.grid(True, alpha=0.3)
+    ax3.tick_params(labelbottom=True)
+    ax3b = ax3.twinx()
+    ax3b.plot(price.index, price["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+    ax3b.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+    ax3b.tick_params(axis="y", labelcolor=colors["price"])
+    ax3b.legend(fontsize=9, loc="upper right")
+    ax3.set_xlabel("Date", fontsize=9)
 
-    ax2 = axes[1]
-    ax2.plot(cot["date"], cot["spec_gross"],  color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
-    ax2.plot(cot["date"], cot["hedge_gross"], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
-    ax2.plot(cot["date"], cot["swap_gross"],  color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
-    ax2.set_ylabel("Contracts", fontsize=10)
-    ax2.set_title("Gross Open Interest by Group\n(note: sums exceed total OI as longs & shorts are counted separately per group)", fontsize=11)
-    ax2.legend(fontsize=9)
-    ax2.grid(True, alpha=0.3)
-    ax2.set_xlabel("Date", fontsize=10)
+    for ax in axes:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+        ax.set_xlabel("Date", fontsize=9)
+        ax.tick_params(axis="x", labelbottom=True, rotation=45)
 
-    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
-    ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
     fig.autofmt_xdate(rotation=45)
-
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 0.95, 0.97])
     return fig
 
-# ── PLOT ZOOM ────────────────────────────────────────────────────────────────
-def plot_zoom(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
-    # Filter to Nov 2025 – Feb 2026
-    cot_zoom  = cot[(cot["date"] >= "2025-11-01") & (cot["date"] <= "2026-02-28")].copy()
-    price_zoom = price[(price.index >= "2025-11-01") & (price.index <= "2026-02-28")]
 
-    fig, axes = plt.subplots(3, 1, figsize=(14, 14), sharex=True)
-    fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026", fontsize=15, fontweight="bold")
+# ── PLOT ZOOM 1 ───────────────────────────────────────────────────────────────
+def plot_zoom_1(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
+    cot_zoom   = cot[(cot["date"] >= "2025-11-01") & (cot["date"] <= "2026-02-28")].copy()
+    price_zoom = price[(price.index >= "2025-11-01") & (price.index <= "2026-02-28")]
+    peak_date  = pd.Timestamp(price_zoom["price"].squeeze().idxmax())
+
+    fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+    fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026 (Price & Positioning)", fontsize=15, fontweight="bold", x=0.5)
 
     colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
 
-    # ── Panel 1: Silver Price (daily line) ───────────────────────────────────
+    def add_price_overlay(ax):
+        axb = ax.twinx()
+        axb.plot(price_zoom.index, price_zoom["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+        axb.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+        axb.tick_params(axis="y", labelcolor=colors["price"])
+        axb.legend(fontsize=9, loc="upper right")
+        return axb
+
+    def add_peak_line(ax):
+        ax.axvline(peak_date, color="black", linewidth=1.2, linestyle="--")
+
+    # ── Panel 1: Silver Price ────────────────────────────────────────────────
     ax1 = axes[0]
     ax1.plot(price_zoom.index, price_zoom["price"], color=colors["price"], linewidth=1.5)
     ax1.fill_between(price_zoom.index, price_zoom["price"].squeeze(), alpha=0.1, color=colors["price"])
+    ax1.axvline(peak_date, color="black", linewidth=1.2, linestyle="--")
+    ax1.text(peak_date, float(price_zoom["price"].max().values[0]), " Price Peak", fontsize=8, color="black", va="top")
     ax1.set_ylabel("Silver Price (USD)", fontsize=10)
     ax1.set_title("Silver Spot Price", fontsize=11)
+    ax1.set_xlabel("Date", fontsize=9)
     ax1.grid(True, alpha=0.3)
+    ax1.tick_params(labelbottom=True)
 
-    # ── Panel 2: Net Positions (weekly dots) ─────────────────────────────────
+    # ── Panel 2: Net Positioning ─────────────────────────────────────────────
     ax2 = axes[1]
     ax2.plot(cot_zoom["date"], cot_zoom["spec_net"],   color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators) Net")
     ax2.plot(cot_zoom["date"], cot_zoom["hedger_net"], color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers) Net")
     ax2.plot(cot_zoom["date"], cot_zoom["swap_net"],   color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks) Net")
     ax2.axhline(0, color="black", linewidth=0.7, linestyle="--")
+    add_peak_line(ax2)
     ax2.set_ylabel("Net Contracts", fontsize=10)
     ax2.set_title("Net Positioning: Speculators vs Hedgers vs Swap Dealers (Weekly COT)", fontsize=11)
     ax2.legend(fontsize=9, loc="upper left")
     ax2.grid(True, alpha=0.3)
-    ax2b = ax2.twinx()
-    ax2b.plot(price_zoom.index, price_zoom["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
-    ax2b.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
-    ax2b.tick_params(axis="y", labelcolor=colors["price"])
-    ax2b.legend(fontsize=9, loc="upper right")
+    ax2.tick_params(labelbottom=True)
+    add_price_overlay(ax2)
 
-    # ── Panel 3: Speculator Share (weekly dots) ───────────────────────────────
-    cot_zoom["spec_share"] = (cot_zoom[COLS["speculator_long"]] + cot_zoom[COLS["speculator_short"]]) / cot_zoom[COLS["open_int"]] * 100
-    ax3 = axes[2]
-    ax3.plot(cot_zoom["date"], cot_zoom["spec_share"], color=colors["spec"], marker="o", linestyle="None", markersize=5, label="Speculator Share %")
-    ax3.set_ylabel("% of Open Interest", fontsize=10)
-    ax3.set_title("Speculator Share of Total Open Interest (Weekly COT)", fontsize=11)
-    ax3.legend(fontsize=9, loc="upper left")
-    ax3.grid(True, alpha=0.3)
-    ax3b = ax3.twinx()
-    ax3b.plot(price_zoom.index, price_zoom["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
-    ax3b.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
-    ax3b.tick_params(axis="y", labelcolor=colors["price"])
-    ax3b.legend(fontsize=9, loc="upper right")
-
-    # ── Format X axis ────────────────────────────────────────────────────────
-    ax3.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-    ax3.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
-    ax3.set_xlabel("Date", fontsize=10)
+    for ax in axes:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+        ax.set_xlabel("Date", fontsize=9)
+        ax.tick_params(axis="x", labelbottom=True, rotation=45)
 
     fig.autofmt_xdate(rotation=45)
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 0.95, 0.97])
+    return fig
+
+
+# ── PLOT ZOOM 2 ───────────────────────────────────────────────────────────────
+def plot_zoom_2(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
+    cot_zoom   = cot[(cot["date"] >= "2025-11-01") & (cot["date"] <= "2026-02-28")].copy()
+    price_zoom = price[(price.index >= "2025-11-01") & (price.index <= "2026-02-28")]
+    peak_date  = pd.Timestamp(price_zoom["price"].squeeze().idxmax())
+
+    fig, axes = plt.subplots(3, 1, figsize=(14, 14), sharex=True)
+    fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026 (Open Interest Analysis)", fontsize=15, fontweight="bold", x=0.5)
+
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+
+    def add_price_overlay(ax):
+        axb = ax.twinx()
+        axb.plot(price_zoom.index, price_zoom["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+        axb.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+        axb.tick_params(axis="y", labelcolor=colors["price"])
+        axb.legend(fontsize=9, loc="upper right")
+        return axb
+
+    def add_peak_line(ax):
+        ax.axvline(peak_date, color="black", linewidth=1.2, linestyle="--")
+
+    # ── Panel 1: Total OI (weekly dots) ──────────────────────────────────────
+    ax1 = axes[0]
+    ax1.plot(cot_zoom["date"], cot_zoom[COLS["open_int"]], color="black", marker="o", linestyle="None", markersize=5, label="Total Open Interest")
+    add_peak_line(ax1)
+    ax1.set_ylabel("Contracts", fontsize=10)
+    ax1.set_title("Total Open Interest (Weekly COT)", fontsize=11)
+    ax1.legend(fontsize=9, loc="upper left")
+    ax1.grid(True, alpha=0.3)
+    ax1.tick_params(labelbottom=True)
+    add_price_overlay(ax1)
+    ax1.set_xlabel("Date", fontsize=9)
+
+    # ── Panel 2: Speculator Share
+    cot_zoom["spec_share"] = (cot_zoom[COLS["speculator_long"]] + cot_zoom[COLS["speculator_short"]]) / cot_zoom[COLS["open_int"]] * 100
+    ax2 = axes[1]
+    ax2.plot(cot_zoom["date"], cot_zoom["spec_share"], color=colors["spec"], marker="o", linestyle="None", markersize=5, label="Speculator Share %")
+    add_peak_line(ax2)
+    ax2.set_ylabel("% of Open Interest", fontsize=10)
+    ax2.set_title("Speculator Share of Total Open Interest (Weekly COT)", fontsize=11)
+    ax2.legend(fontsize=9, loc="upper left")
+    ax2.grid(True, alpha=0.3)
+    ax2.tick_params(labelbottom=True)
+    add_price_overlay(ax2)
+    ax2.set_xlabel("Date", fontsize=9)
+
+    # ── Panel 3: Gross OI
+    cot_zoom["spec_gross"]  = cot_zoom[COLS["speculator_long"]]  + cot_zoom[COLS["speculator_short"]]
+    cot_zoom["hedge_gross"] = cot_zoom[COLS["commercial_long"]]  + cot_zoom[COLS["commercial_short"]]
+    cot_zoom["swap_gross"]  = cot_zoom[COLS["swap_long"]]        + cot_zoom[COLS["swap_short"]]
+    ax3 = axes[2]
+    ax3.plot(cot_zoom["date"], cot_zoom["spec_gross"],  color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
+    ax3.plot(cot_zoom["date"], cot_zoom["hedge_gross"], color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
+    ax3.plot(cot_zoom["date"], cot_zoom["swap_gross"],  color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    add_peak_line(ax3)
+    ax3.set_ylabel("Contracts", fontsize=10)
+    ax3.set_title("Gross Open Interest by Group (Weekly COT)", fontsize=11)
+    ax3.legend(fontsize=9, loc="upper left")
+    ax3.grid(True, alpha=0.3)
+    ax3.tick_params(labelbottom=True)
+    add_price_overlay(ax3)
+
+    for ax in axes:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+        ax.set_xlabel("Date", fontsize=9)
+        ax.tick_params(axis="x", labelbottom=True, rotation=45)
+
+    fig.autofmt_xdate(rotation=45)
+    plt.tight_layout(rect=[0, 0, 0.95, 0.97])
     return fig
 
 # ── EXPORT CSV ───────────────────────────────────────────────────────────────
@@ -336,5 +432,6 @@ if __name__ == "__main__":
     with PdfPages(out_path) as pdf:
         pdf.savefig(plot_main(cot, price), bbox_inches="tight")
         pdf.savefig(plot_oi(cot, price), bbox_inches="tight")
-        pdf.savefig(plot_zoom(cot, price), bbox_inches="tight")
+        pdf.savefig(plot_zoom_1(cot, price), bbox_inches="tight")
+        pdf.savefig(plot_zoom_2(cot, price), bbox_inches="tight")
         print(f"Charts saved → {out_path}")
