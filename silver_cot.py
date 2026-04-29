@@ -345,6 +345,343 @@ def plot_zoom_2(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     plt.tight_layout(rect=[0, 0, 0.95, 0.97])
     return fig
 
+# ── PLOT DOLLAR EXPOSURE ──────────────────────────────────────────────────────
+def plot_dollar_exposure(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
+    # Merge COT with nearest price
+    price_reset = price.reset_index()
+    price_reset.columns = [col[0] if isinstance(col, tuple) else col for col in price_reset.columns]
+    price_reset = price_reset.rename(columns={"Date": "date"})
+    price_reset["date"] = pd.to_datetime(price_reset["date"]).astype("datetime64[us]")
+
+    cot_merged = pd.merge_asof(
+        cot.sort_values("date"),
+        price_reset[["date", "price"]].sort_values("date"),
+        on="date",
+        direction="nearest"
+    )
+
+    # Dollar exposure = net contracts × price × 5,000 oz per contract
+    OZ_PER_CONTRACT = 5000
+    cot_merged["spec_dollar"]  = cot_merged["spec_net"]   * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["hedge_dollar"] = cot_merged["hedger_net"] * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["swap_dollar"]  = cot_merged["swap_net"]   * cot_merged["price"] * OZ_PER_CONTRACT
+
+    # Zoom window
+    cot_zoom   = cot_merged[(cot_merged["date"] >= "2025-11-01") & (cot_merged["date"] <= "2026-02-28")].copy()
+    price_zoom = price[(price.index >= "2025-11-01") & (price.index <= "2026-02-28")]
+    peak_date  = pd.Timestamp(price_zoom["price"].squeeze().idxmax())
+
+    fig, axes = plt.subplots(2, 1, figsize=(14, 10))
+    fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026 (Dollar Exposure by Group)", fontsize=15, fontweight="bold", x=0.5)
+
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+
+    def add_price_overlay(ax):
+        axb = ax.twinx()
+        axb.plot(price_zoom.index, price_zoom["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+        axb.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+        axb.tick_params(axis="y", labelcolor=colors["price"])
+        axb.legend(fontsize=9, loc="upper right")
+        return axb
+
+    def add_peak_line(ax):
+        ax.axvline(peak_date, color="black", linewidth=1.2, linestyle="--")
+
+    # ── Panel 1: Full range dollar exposure ──────────────────────────────────
+    ax1 = axes[0]
+    ax1.plot(cot_merged["date"], cot_merged["spec_dollar"]  / 1e9, color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
+    ax1.plot(cot_merged["date"], cot_merged["hedge_dollar"] / 1e9, color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
+    ax1.plot(cot_merged["date"], cot_merged["swap_dollar"]  / 1e9, color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax1.axhline(0, color="black", linewidth=0.7, linestyle="--")
+    ax1.set_ylabel("Net Dollar Exposure (USD Billions)", fontsize=10)
+    ax1.set_title("Net Dollar Exposure by Group (Full Range)", fontsize=11)
+    ax1.legend(fontsize=9, loc="upper left")
+    ax1.grid(True, alpha=0.3)
+    ax1.tick_params(axis="x", labelbottom=True, rotation=45)
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+    ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+    ax1.set_xlabel("Date", fontsize=9)
+
+    # ── Panel 2: Zoom dollar exposure (weekly dots) ───────────────────────────
+    ax2 = axes[1]
+    ax2.plot(cot_zoom["date"], cot_zoom["spec_dollar"]  / 1e9, color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
+    ax2.plot(cot_zoom["date"], cot_zoom["hedge_dollar"] / 1e9, color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
+    ax2.plot(cot_zoom["date"], cot_zoom["swap_dollar"]  / 1e9, color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    ax2.axhline(0, color="black", linewidth=0.7, linestyle="--")
+    add_peak_line(ax2)
+    ax2.set_ylabel("Net Dollar Exposure (USD Billions)", fontsize=10)
+    ax2.set_title("Net Dollar Exposure by Group — Zoom (Weekly COT)", fontsize=11)
+    ax2.legend(fontsize=9, loc="upper left")
+    ax2.grid(True, alpha=0.3)
+    ax2.tick_params(axis="x", labelbottom=True, rotation=45)
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    ax2.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+    ax2.set_xlabel("Date", fontsize=9)
+    add_price_overlay(ax2)
+
+    plt.tight_layout(rect=[0, 0, 0.95, 0.97])
+    return fig
+
+# ── PLOT DOLLAR EXPOSURE LONG SHORT FULL ──────────────────────────────────────
+def plot_dollar_exposure_ls_full(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
+    price_reset = price.reset_index()
+    price_reset.columns = [col[0] if isinstance(col, tuple) else col for col in price_reset.columns]
+    price_reset = price_reset.rename(columns={"Date": "date"})
+    price_reset["date"] = pd.to_datetime(price_reset["date"]).astype("datetime64[us]")
+
+    cot_merged = pd.merge_asof(
+        cot.sort_values("date"),
+        price_reset[["date", "price"]].sort_values("date"),
+        on="date",
+        direction="nearest"
+    )
+
+    OZ_PER_CONTRACT = 5000
+    cot_merged["spec_long_exp"]  = cot_merged[COLS["speculator_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["hedge_long_exp"] = cot_merged[COLS["commercial_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["swap_long_exp"]  = cot_merged[COLS["swap_long"]]        * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["spec_short_exp"]  = cot_merged[COLS["speculator_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["hedge_short_exp"] = cot_merged[COLS["commercial_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["swap_short_exp"]  = cot_merged[COLS["swap_short"]]       * cot_merged["price"] * OZ_PER_CONTRACT
+
+    fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+    fig.suptitle("Silver (COMEX): Dollar Exposure by Long & Short — Full Range", fontsize=15, fontweight="bold", x=0.5)
+
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+
+    def add_price_overlay(ax):
+        axb = ax.twinx()
+        axb.plot(price.index, price["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+        axb.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+        axb.tick_params(axis="y", labelcolor=colors["price"])
+        axb.legend(fontsize=9, loc="upper right")
+        return axb
+
+    # ── Panel 1: Long Exposure ────────────────────────────────────────────────
+    ax1 = axes[0]
+    ax1.plot(cot_merged["date"], cot_merged["spec_long_exp"]  / 1e9, color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
+    ax1.plot(cot_merged["date"], cot_merged["hedge_long_exp"] / 1e9, color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
+    ax1.plot(cot_merged["date"], cot_merged["swap_long_exp"]  / 1e9, color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax1.set_ylabel("Long Dollar Exposure (USD Billions)", fontsize=10)
+    ax1.set_title("Long Dollar Exposure by Group (Full Range)", fontsize=11)
+    ax1.legend(fontsize=9, loc="upper left")
+    ax1.grid(True, alpha=0.3)
+    ax1.tick_params(labelbottom=True)
+    add_price_overlay(ax1)
+    ax1.set_xlabel("Date", fontsize=9)
+
+    # ── Panel 2: Short Exposure ───────────────────────────────────────────────
+    ax2 = axes[1]
+    ax2.plot(cot_merged["date"], cot_merged["spec_short_exp"]  / 1e9, color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
+    ax2.plot(cot_merged["date"], cot_merged["hedge_short_exp"] / 1e9, color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
+    ax2.plot(cot_merged["date"], cot_merged["swap_short_exp"]  / 1e9, color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax2.set_ylabel("Short Dollar Exposure (USD Billions)", fontsize=10)
+    ax2.set_title("Short Dollar Exposure by Group (Full Range)", fontsize=11)
+    ax2.legend(fontsize=9, loc="upper left")
+    ax2.grid(True, alpha=0.3)
+    ax2.tick_params(labelbottom=True)
+    add_price_overlay(ax2)
+
+    for ax in axes:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+        ax.set_xlabel("Date", fontsize=9)
+        ax.tick_params(axis="x", labelbottom=True, rotation=45)
+
+    fig.autofmt_xdate(rotation=45)
+    plt.tight_layout(rect=[0, 0, 0.95, 0.97])
+    return fig
+
+
+# ── PLOT DOLLAR EXPOSURE LONG SHORT ZOOM ─────────────────────────────────────
+def plot_dollar_exposure_ls_zoom(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
+    price_reset = price.reset_index()
+    price_reset.columns = [col[0] if isinstance(col, tuple) else col for col in price_reset.columns]
+    price_reset = price_reset.rename(columns={"Date": "date"})
+    price_reset["date"] = pd.to_datetime(price_reset["date"]).astype("datetime64[us]")
+
+    cot_merged = pd.merge_asof(
+        cot.sort_values("date"),
+        price_reset[["date", "price"]].sort_values("date"),
+        on="date",
+        direction="nearest"
+    )
+
+    OZ_PER_CONTRACT = 5000
+    cot_merged["spec_long_exp"]  = cot_merged[COLS["speculator_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["hedge_long_exp"] = cot_merged[COLS["commercial_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["swap_long_exp"]  = cot_merged[COLS["swap_long"]]        * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["spec_short_exp"]  = cot_merged[COLS["speculator_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["hedge_short_exp"] = cot_merged[COLS["commercial_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["swap_short_exp"]  = cot_merged[COLS["swap_short"]]       * cot_merged["price"] * OZ_PER_CONTRACT
+
+    cot_zoom   = cot_merged[(cot_merged["date"] >= "2025-11-01") & (cot_merged["date"] <= "2026-02-28")].copy()
+    price_zoom = price[(price.index >= "2025-11-01") & (price.index <= "2026-02-28")]
+    peak_date  = pd.Timestamp(price_zoom["price"].squeeze().idxmax())
+
+    fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+    fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026 (Dollar Exposure by Long & Short)", fontsize=15, fontweight="bold", x=0.5)
+
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+
+    def add_price_overlay(ax):
+        axb = ax.twinx()
+        axb.plot(price_zoom.index, price_zoom["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+        axb.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+        axb.tick_params(axis="y", labelcolor=colors["price"])
+        axb.legend(fontsize=9, loc="upper right")
+        return axb
+
+    def add_peak_line(ax):
+        ax.axvline(peak_date, color="black", linewidth=1.2, linestyle="--")
+
+    # ── Panel 1: Long Exposure Zoom ───────────────────────────────────────────
+    ax1 = axes[0]
+    ax1.plot(cot_zoom["date"], cot_zoom["spec_long_exp"]  / 1e9, color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
+    ax1.plot(cot_zoom["date"], cot_zoom["hedge_long_exp"] / 1e9, color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
+    ax1.plot(cot_zoom["date"], cot_zoom["swap_long_exp"]  / 1e9, color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    add_peak_line(ax1)
+    ax1.set_ylabel("Long Dollar Exposure (USD Billions)", fontsize=10)
+    ax1.set_title("Long Dollar Exposure by Group (Weekly COT)", fontsize=11)
+    ax1.legend(fontsize=9, loc="upper left")
+    ax1.grid(True, alpha=0.3)
+    ax1.tick_params(labelbottom=True)
+    add_price_overlay(ax1)
+    ax1.set_xlabel("Date", fontsize=9)
+
+    # ── Panel 2: Short Exposure Zoom ──────────────────────────────────────────
+    ax2 = axes[1]
+    ax2.plot(cot_zoom["date"], cot_zoom["spec_short_exp"]  / 1e9, color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
+    ax2.plot(cot_zoom["date"], cot_zoom["hedge_short_exp"] / 1e9, color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
+    ax2.plot(cot_zoom["date"], cot_zoom["swap_short_exp"]  / 1e9, color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    add_peak_line(ax2)
+    ax2.set_ylabel("Short Dollar Exposure (USD Billions)", fontsize=10)
+    ax2.set_title("Short Dollar Exposure by Group (Weekly COT)", fontsize=11)
+    ax2.legend(fontsize=9, loc="upper left")
+    ax2.grid(True, alpha=0.3)
+    ax2.tick_params(labelbottom=True)
+    add_price_overlay(ax2)
+
+    for ax in axes:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+        ax.set_xlabel("Date", fontsize=9)
+        ax.tick_params(axis="x", labelbottom=True, rotation=45)
+
+    fig.autofmt_xdate(rotation=45)
+    plt.tight_layout(rect=[0, 0, 0.95, 0.97])
+    return fig
+
+# ── PLOT LONGS AND SHORTS FULL RANGE ─────────────────────────────────────────
+def plot_longs_shorts_full(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
+    fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+    fig.suptitle("Silver (COMEX): Long & Short Positions by Group (Full Range)", fontsize=15, fontweight="bold", x=0.5)
+
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+
+    def add_price_overlay(ax):
+        axb = ax.twinx()
+        axb.plot(price.index, price["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+        axb.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+        axb.tick_params(axis="y", labelcolor=colors["price"])
+        axb.legend(fontsize=9, loc="upper right")
+        return axb
+
+    # ── Panel 1: Longs ────────────────────────────────────────────────────────
+    ax1 = axes[0]
+    ax1.plot(cot["date"], cot[COLS["speculator_long"]], color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
+    ax1.plot(cot["date"], cot[COLS["commercial_long"]], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
+    ax1.plot(cot["date"], cot[COLS["swap_long"]],       color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax1.set_ylabel("Contracts", fontsize=10)
+    ax1.set_title("Long Positions by Group", fontsize=11)
+    ax1.legend(fontsize=9, loc="upper left")
+    ax1.grid(True, alpha=0.3)
+    ax1.tick_params(labelbottom=True)
+    add_price_overlay(ax1)
+    ax1.set_xlabel("Date", fontsize=9)
+
+    # ── Panel 2: Shorts ───────────────────────────────────────────────────────
+    ax2 = axes[1]
+    ax2.plot(cot["date"], cot[COLS["speculator_short"]], color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
+    ax2.plot(cot["date"], cot[COLS["commercial_short"]], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
+    ax2.plot(cot["date"], cot[COLS["swap_short"]],       color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax2.set_ylabel("Contracts", fontsize=10)
+    ax2.set_title("Short Positions by Group", fontsize=11)
+    ax2.legend(fontsize=9, loc="upper left")
+    ax2.grid(True, alpha=0.3)
+    ax2.tick_params(labelbottom=True)
+    add_price_overlay(ax2)
+
+    for ax in axes:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+        ax.set_xlabel("Date", fontsize=9)
+        ax.tick_params(axis="x", labelbottom=True, rotation=45)
+
+    fig.autofmt_xdate(rotation=45)
+    plt.tight_layout(rect=[0, 0, 0.95, 0.97])
+    return fig
+
+
+# ── PLOT LONGS AND SHORTS ZOOM ────────────────────────────────────────────────
+def plot_longs_shorts_zoom(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
+    cot_zoom   = cot[(cot["date"] >= "2025-11-01") & (cot["date"] <= "2026-02-28")].copy()
+    price_zoom = price[(price.index >= "2025-11-01") & (price.index <= "2026-02-28")]
+    peak_date  = pd.Timestamp(price_zoom["price"].squeeze().idxmax())
+
+    fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+    fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026 (Longs & Shorts by Group)", fontsize=15, fontweight="bold", x=0.5)
+
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+
+    def add_price_overlay(ax):
+        axb = ax.twinx()
+        axb.plot(price_zoom.index, price_zoom["price"], color=colors["price"], linewidth=1.2, alpha=0.5, label="Silver Price")
+        axb.set_ylabel("Silver Price (USD)", fontsize=9, color=colors["price"])
+        axb.tick_params(axis="y", labelcolor=colors["price"])
+        axb.legend(fontsize=9, loc="upper right")
+        return axb
+
+    def add_peak_line(ax):
+        ax.axvline(peak_date, color="black", linewidth=1.2, linestyle="--")
+
+    # ── Panel 1: Longs ────────────────────────────────────────────────────────
+    ax1 = axes[0]
+    ax1.plot(cot_zoom["date"], cot_zoom[COLS["speculator_long"]], color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
+    ax1.plot(cot_zoom["date"], cot_zoom[COLS["commercial_long"]], color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
+    ax1.plot(cot_zoom["date"], cot_zoom[COLS["swap_long"]],       color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    add_peak_line(ax1)
+    ax1.set_ylabel("Contracts", fontsize=10)
+    ax1.set_title("Long Positions by Group (Weekly COT)", fontsize=11)
+    ax1.legend(fontsize=9, loc="upper left")
+    ax1.grid(True, alpha=0.3)
+    ax1.tick_params(labelbottom=True)
+    add_price_overlay(ax1)
+    ax1.set_xlabel("Date", fontsize=9)
+
+    # ── Panel 2: Shorts ───────────────────────────────────────────────────────
+    ax2 = axes[1]
+    ax2.plot(cot_zoom["date"], cot_zoom[COLS["speculator_short"]], color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
+    ax2.plot(cot_zoom["date"], cot_zoom[COLS["commercial_short"]], color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
+    ax2.plot(cot_zoom["date"], cot_zoom[COLS["swap_short"]],       color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    add_peak_line(ax2)
+    ax2.set_ylabel("Contracts", fontsize=10)
+    ax2.set_title("Short Positions by Group (Weekly COT)", fontsize=11)
+    ax2.legend(fontsize=9, loc="upper left")
+    ax2.grid(True, alpha=0.3)
+    ax2.tick_params(labelbottom=True)
+    add_price_overlay(ax2)
+
+    for ax in axes:
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=1))
+        ax.set_xlabel("Date", fontsize=9)
+        ax.tick_params(axis="x", labelbottom=True, rotation=45)
+
+    fig.autofmt_xdate(rotation=45)
+    plt.tight_layout(rect=[0, 0, 0.95, 0.97])
+    return fig
+
 # ── EXPORT CSV ───────────────────────────────────────────────────────────────
 def export_csv(cot: pd.DataFrame, price: pd.DataFrame):
     price_reset = price.reset_index()
@@ -360,6 +697,16 @@ def export_csv(cot: pd.DataFrame, price: pd.DataFrame):
         on="date",
         direction="nearest"
     )
+    OZ_PER_CONTRACT = 5000
+    merged["spec_long_exposure"]   = merged["M_Money_Positions_Long_All"]    * merged["price"] * OZ_PER_CONTRACT
+    merged["spec_short_exposure"]  = merged["M_Money_Positions_Short_All"]   * merged["price"] * OZ_PER_CONTRACT
+    merged["spec_net_exposure"]    = merged["spec_net"]                      * merged["price"] * OZ_PER_CONTRACT
+    merged["hedge_long_exposure"]  = merged["Prod_Merc_Positions_Long_All"]  * merged["price"] * OZ_PER_CONTRACT
+    merged["hedge_short_exposure"] = merged["Prod_Merc_Positions_Short_All"] * merged["price"] * OZ_PER_CONTRACT
+    merged["hedge_net_exposure"]   = merged["hedger_net"]                    * merged["price"] * OZ_PER_CONTRACT
+    merged["swap_long_exposure"]   = merged["Swap_Positions_Long_All"]       * merged["price"] * OZ_PER_CONTRACT
+    merged["swap_short_exposure"]  = merged["Swap__Positions_Short_All"]     * merged["price"] * OZ_PER_CONTRACT
+    merged["swap_net_exposure"]    = merged["swap_net"]                      * merged["price"] * OZ_PER_CONTRACT
     merged.to_csv("silver_cot_data.csv", index=False)
     print(f"Data exported → silver_cot_data.csv  ({len(merged)} rows)")
 
@@ -410,10 +757,12 @@ def validate(cot: pd.DataFrame):
 
 # ── VERSION OUTPUT FILE ───────────────────────────────────────────────────────
 def get_versioned_filename(base: str, ext: str) -> str:
+    folder = "Silver COT Charts"
+    os.makedirs(folder, exist_ok=True)
     version = 1
-    while os.path.exists(f"{base}_v{version}.{ext}"):
+    while os.path.exists(f"{folder}/{base}_v{version}.{ext}"):
         version += 1
-    return f"{base}_v{version}.{ext}"
+    return f"{folder}/{base}_v{version}.{ext}"
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
@@ -434,4 +783,9 @@ if __name__ == "__main__":
         pdf.savefig(plot_oi(cot, price), bbox_inches="tight")
         pdf.savefig(plot_zoom_1(cot, price), bbox_inches="tight")
         pdf.savefig(plot_zoom_2(cot, price), bbox_inches="tight")
+        pdf.savefig(plot_dollar_exposure(cot, price), bbox_inches="tight")
+        pdf.savefig(plot_dollar_exposure_ls_full(cot, price), bbox_inches="tight")
+        pdf.savefig(plot_dollar_exposure_ls_zoom(cot, price), bbox_inches="tight")
+        pdf.savefig(plot_longs_shorts_full(cot, price), bbox_inches="tight")
+        pdf.savefig(plot_longs_shorts_zoom(cot, price), bbox_inches="tight")
         print(f"Charts saved → {out_path}")
