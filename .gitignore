@@ -4,3 +4,6 @@ silver-cot-env/
 *.csv
 __pycache__/
 *.pyc
+.DS_Store
+.obsidian/
+Silver COT Charts/
