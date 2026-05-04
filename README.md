@@ -44,6 +44,12 @@ taking the other side of client trades and managing the resulting exposure
 through futures markets. Their positioning reflects both their own book 
 management and their clients' hedging needs.
 
+**4. Other Reportable** 
+Traders who are large enough to meet the CFTC's reporting threshold (so they have to file reports) but don't fit neatly into the three main categories. Think smaller hedge funds, proprietary trading firms, or other financial entities that aren't classified as Managed Money, Commercials, or Swap Dealers.
+
+**5. Non-Reportable** 
+Traders whose positions are below the CFTC's reporting threshold, so they don't have to file individual reports. The CFTC calculates this category by subtracting all reportable positions from total open interest. This is essentially the retail traders — small investors, individual speculators, etc.
+
 ## Population
 - **Participants:** Only "reportable" traders — those holding positions above 
   CFTC reporting thresholds. Smaller retail traders are captured in the 
