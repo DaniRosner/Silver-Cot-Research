@@ -24,8 +24,8 @@ weekly time series. Price data is fetched from Yahoo Finance and merged
 by nearest date.
 
 ## Data Categories
-The Disaggregated COT report breaks participants into four categories. 
-This project tracks three:
+The Disaggregated COT report breaks participants into five categories, 
+all of which this project tracks:
 
 **1. Managed Money (Speculators)**  
 Hedge funds, commodity trading advisors (CTAs), and algorithmic traders. 
@@ -51,9 +51,9 @@ Traders who are large enough to meet the CFTC's reporting threshold (so they hav
 Traders whose positions are below the CFTC's reporting threshold, so they don't have to file individual reports. The CFTC calculates this category by subtracting all reportable positions from total open interest. This is essentially the retail traders — small investors, individual speculators, etc.
 
 ## Population
-- **Participants:** Only "reportable" traders — those holding positions above 
-  CFTC reporting thresholds. Smaller retail traders are captured in the 
-  "Non-Reportable" category, which this project excludes.
+- **Participants:** All five CFTC participant categories are tracked — Managed Money, 
+  Producer/Merchant/Processor/User, Swap Dealers, Other Reportable, and Non-Reportable. 
+  Together these account for 100% of total open interest.
 - **Contracts:** Standard COMEX Silver futures (5,000 troy ounces per contract). 
   Micro contracts (1,000 oz) are not included in this dataset.
 - **Market:** Futures-only (excludes options).
