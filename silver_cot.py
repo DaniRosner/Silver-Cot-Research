@@ -37,7 +37,11 @@ COLS = {
     "swap_short"       : "Swap__Positions_Short_All",
     "open_int"         : "Open_Interest_All",
     "code"             : "CFTC_Commodity_Code",
-    "market_name" : "Market_and_Exchange_Names",
+    "market_name"      : "Market_and_Exchange_Names",
+    "other_long"       : "Other_Rept_Positions_Long_All",
+    "other_short"      : "Other_Rept_Positions_Short_All",
+    "nonrept_long"     : "NonRept_Positions_Long_All",
+    "nonrept_short"    : "NonRept_Positions_Short_All",
 }
 
 # ── DOWNLOAD & PARSE COT DATA:  ────────────────────────────────────────────────
@@ -73,15 +77,19 @@ def load_silver_cot(start_year: int, end_year: int) -> pd.DataFrame:
     cot = cot.sort_values(COLS["date"]).drop_duplicates(COLS["date"])
 
     # Derived columns
-    cot["spec_net"]  = cot[COLS["speculator_long"]]  - cot[COLS["speculator_short"]]
-    cot["hedger_net"]= cot[COLS["commercial_long"]]  - cot[COLS["commercial_short"]]
-    cot["swap_net"]  = cot[COLS["swap_long"]]        - cot[COLS["swap_short"]]
-    cot["date"]      = cot[COLS["date"]]
+    cot["spec_net"]   = cot[COLS["speculator_long"]] - cot[COLS["speculator_short"]]
+    cot["hedger_net"] = cot[COLS["commercial_long"]] - cot[COLS["commercial_short"]]
+    cot["swap_net"]   = cot[COLS["swap_long"]]       - cot[COLS["swap_short"]]
+    cot["other_net"]  = cot[COLS["other_long"]]      - cot[COLS["other_short"]]
+    cot["nonrept_net"]= cot[COLS["nonrept_long"]]    - cot[COLS["nonrept_short"]]
+    cot["date"]       = cot[COLS["date"]]
 
-    return cot[["date", "spec_net", "hedger_net", "swap_net",
+    return cot[["date", "spec_net", "hedger_net", "swap_net", "other_net", "nonrept_net",
             COLS["speculator_long"], COLS["speculator_short"],
             COLS["commercial_long"], COLS["commercial_short"],
             COLS["swap_long"], COLS["swap_short"],
+            COLS["other_long"], COLS["other_short"],
+            COLS["nonrept_long"], COLS["nonrept_short"],
             COLS["open_int"]]]
 
 # ── FETCH SILVER PRICE──────────────────────────────────────────────────────
@@ -715,14 +723,16 @@ def export_csv(cot: pd.DataFrame, price: pd.DataFrame):
 def validate(cot: pd.DataFrame):
     print("\n── Validation Report ──────────────────────────────────────────")
     
-    # Check 1: Net positions sum to near zero
-    cot["total_net"] = cot["spec_net"] + cot["hedger_net"] + cot["swap_net"]
-    max_imbalance = cot["total_net"].abs().max()
-    mean_imbalance = cot["total_net"].abs().mean()
-    print(f"Check 1 - Net positions sum to zero:")
-    print(f"  Max imbalance:  {max_imbalance:,.0f} contracts")
-    print(f"  Mean imbalance: {mean_imbalance:,.0f} contracts")
-    if mean_imbalance < 5000:
+    # Check 1: Total longs = total shorts across all five groups
+    total_longs  = (cot[COLS["speculator_long"]] + cot[COLS["commercial_long"]] +
+                    cot[COLS["swap_long"]] + cot[COLS["other_long"]] + cot[COLS["nonrept_long"]])
+    total_shorts = (cot[COLS["speculator_short"]] + cot[COLS["commercial_short"]] +
+                    cot[COLS["swap_short"]] + cot[COLS["other_short"]] + cot[COLS["nonrept_short"]])
+    imbalance = (total_longs - total_shorts).abs()
+    print(f"Check 1 - Total longs = total shorts across all five groups:")
+    print(f"  Max imbalance:  {imbalance.max():,.0f} contracts")
+    print(f"  Mean imbalance: {imbalance.mean():,.0f} contracts")
+    if imbalance.mean() < 1000:
         print("  ✓ PASS")
     else:
         print("  ✗ FAIL - imbalance too large")
