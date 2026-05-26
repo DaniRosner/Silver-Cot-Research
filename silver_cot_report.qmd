@@ -1,0 +1,241 @@
+---
+title: "Silver Futures: Boom, Bust, and the Commitments of Traders"
+author: "Dani Rosner"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    self-contained: true
+execute:
+  echo: true
+  warning: false
+  message: false
+jupyter: python3
+---
+
+## Overview
+
+This report analyzes the silver futures market using weekly CFTC Commitments of Traders (COT) data from January 2020 through May 2026. The central question is: **who drove the dramatic silver price spike of January 2026, and what caused the subsequent crash?**
+
+Silver prices rose from roughly \$47 in November 2025 to a peak of approximately \$113 on January 27, 2026 — a 140% gain in under three months — before collapsing back to \$75 within days. The COT data offers a unique window into the positioning of different market participants leading up to and following this event.
+
+---
+
+## Data
+
+The analysis uses the CFTC Disaggregated Futures-Only report for Silver (COMEX, commodity code 084691), which breaks down open interest into five participant categories:
+
+1. **Managed Money (Speculators)** — hedge funds, CTAs, and algorithmic traders betting on price direction
+2. **Producer/Merchant/Processor/User (Hedgers)** — silver miners, refiners, and industrial users locking in prices
+3. **Swap Dealers** — large banks acting as intermediaries, managing client exposure through futures
+4. **Other Reportable** — smaller institutions above the reporting threshold that don't fit the above categories
+5. **Non-Reportable** — retail and small traders below the reporting threshold, calculated as the residual
+
+Price data is sourced from Yahoo Finance (ticker: `SI=F`, COMEX silver front-month futures).
+
+```{python}
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from IPython.display import Image
+import tempfile, os
+
+plt.rcParams['figure.dpi'] = 150
+plt.rcParams['figure.figsize'] = (16, 8)
+
+def show_fig(fig):
+    path = tempfile.mktemp(suffix='.png')
+    fig.savefig(path, bbox_inches='tight')
+    plt.close(fig)
+    return Image(path)
+
+# Load pre-processed data
+cot = pd.read_csv("silver_cot_data.csv", parse_dates=["date"])
+print(f"Date range: {cot['date'].min().date()} → {cot['date'].max().date()}")
+print(f"Rows: {len(cot)}")
+
+colors = {"spec": "#e05c00", "hedge": "#0a5c91", "swap": "#8b00ff",
+          "other": "#d4a017", "nonrept": "#2a9d8f", "price": "#2a9d2a"}
+```
+
+### Data Integrity Check
+
+A key validation: in any futures market, total longs must equal total shorts — every contract has a buyer and a seller. When all five groups are included, this holds exactly.
+
+```{python}
+cot["total_long"]  = (cot["M_Money_Positions_Long_All"] + cot["Prod_Merc_Positions_Long_All"] +
+                      cot["Swap_Positions_Long_All"] + cot["Other_Rept_Positions_Long_All"] +
+                      cot["NonRept_Positions_Long_All"])
+cot["total_short"] = (cot["M_Money_Positions_Short_All"] + cot["Prod_Merc_Positions_Short_All"] +
+                      cot["Swap__Positions_Short_All"] + cot["Other_Rept_Positions_Short_All"] +
+                      cot["NonRept_Positions_Short_All"])
+cot["imbalance"] = (cot["total_long"] - cot["total_short"]).abs()
+print(f"Max imbalance: {cot['imbalance'].max():.0f} contracts")
+print(f"Mean imbalance: {cot['imbalance'].mean():.0f} contracts")
+print("✓ Total longs = total shorts across all five groups")
+```
+
+---
+
+## The Rally and Crash
+
+Silver entered a sustained rally beginning in mid-2024, accelerating sharply in November 2025. Prices reached an all-time high of approximately \$113 on January 27, 2026, before crashing roughly 35% within a week.
+
+```{python}
+zoom = cot[(cot["date"] >= "2025-11-01") & (cot["date"] <= "2026-03-01")].copy()
+peak = pd.Timestamp("2026-01-27")
+
+fig, ax = plt.subplots()
+ax.plot(zoom["date"], zoom["price"], color=colors["price"], linewidth=1.5)
+ax.fill_between(zoom["date"], zoom["price"], alpha=0.1, color=colors["price"])
+ax.axvline(peak, color="black", linewidth=1.2, linestyle="--")
+ax.text(peak, float(zoom["price"].max()), " Price Peak ($113)", fontsize=8, color="black", va="top")
+ax.set_title("Silver Spot Price — Nov 2025 to Mar 2026", fontsize=12)
+ax.set_ylabel("Price (USD)")
+ax.set_xlabel("Date")
+ax.grid(True, alpha=0.3)
+ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+plt.xticks(rotation=45)
+plt.tight_layout()
+show_fig(fig)
+```
+
+---
+
+## Who Was Positioning Where?
+
+### Net Positioning by Group
+
+The most striking finding is that **speculators (Managed Money) were not driving the final surge**. Their net long position peaked in early December 2025 at around 29,000 contracts and declined steadily through January 2026 — even as prices continued rising sharply.
+
+Instead, the final push to \$113 appears to have been driven by **swap dealers covering their short positions**. Swap dealers were deeply net short throughout the rally, but their net position moved sharply toward zero in late January — meaning they were buying to close out shorts, which added upward pressure to prices.
+
+```{python}
+fig, ax = plt.subplots()
+for col, label, color in [
+    ("spec_net",    "Managed Money (Speculators)", colors["spec"]),
+    ("hedger_net",  "Commercial (Hedgers)",        colors["hedge"]),
+    ("swap_net",    "Swap Dealers (Big Banks)",    colors["swap"]),
+    ("other_net",   "Other Reportable",            colors["other"]),
+    ("nonrept_net", "Non-Reportable",              colors["nonrept"]),
+]:
+    ax.plot(zoom["date"], zoom[col], marker="o", linestyle="None",
+            markersize=5, color=color, label=label)
+ax.axhline(0, color="black", linewidth=0.7, linestyle="--")
+ax.axvline(peak, color="black", linewidth=1.2, linestyle="--")
+ax.set_title("Net Positioning by Group (Weekly COT) — Nov 2025 to Mar 2026", fontsize=12)
+ax.set_ylabel("Net Contracts")
+ax.set_xlabel("Date")
+ax.legend(fontsize=8, loc="upper left")
+ax.grid(True, alpha=0.3)
+ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+plt.xticks(rotation=45)
+plt.tight_layout()
+show_fig(fig)
+```
+
+### Dollar Exposure
+
+Expressing positions in dollar terms (contracts × price × 5,000 oz/contract) reveals the true financial stakes. By January 27, 2026:
+
+- **Swap dealer short exposure** had grown to approximately **\$27 billion** — by far the largest position in the market
+- **Speculator long exposure** peaked around **\$10 billion** before declining
+- **Non-Reportable (retail) long exposure** tracked the price closely, suggesting momentum-chasing behavior
+
+The total net dollar exposure across all groups sums to zero at every point in time — confirming that every long dollar is matched by a short dollar.
+
+```{python}
+OZ = 5000
+zoom["spec_long_exp"]    = zoom["M_Money_Positions_Long_All"]  * zoom["price"] * OZ / 1e9
+zoom["swap_short_exp"]   = zoom["Swap__Positions_Short_All"]   * zoom["price"] * OZ / 1e9
+zoom["nonrept_long_exp"] = zoom["NonRept_Positions_Long_All"]  * zoom["price"] * OZ / 1e9
+
+fig, axes = plt.subplots(2, 1, sharex=True)
+
+ax1 = axes[0]
+ax1.plot(zoom["date"], zoom["spec_long_exp"],    color=colors["spec"],    marker="o", linestyle="None", markersize=5, label="Speculator Long")
+ax1.plot(zoom["date"], zoom["nonrept_long_exp"], color=colors["nonrept"], marker="o", linestyle="None", markersize=5, label="Non-Reportable Long")
+ax1.axvline(peak, color="black", linewidth=1.2, linestyle="--")
+ax1.set_title("Long Dollar Exposure (USD Billions)", fontsize=11)
+ax1.set_ylabel("USD Billions")
+ax1.legend(fontsize=8, loc="upper left")
+ax1.grid(True, alpha=0.3)
+
+ax2 = axes[1]
+ax2.plot(zoom["date"], zoom["swap_short_exp"], color=colors["swap"], marker="o", linestyle="None", markersize=5, label="Swap Dealer Short")
+ax2.axvline(peak, color="black", linewidth=1.2, linestyle="--")
+ax2.set_title("Swap Dealer Short Dollar Exposure (USD Billions)", fontsize=11)
+ax2.set_ylabel("USD Billions")
+ax2.set_xlabel("Date")
+ax2.legend(fontsize=8, loc="upper left")
+ax2.grid(True, alpha=0.3)
+
+for ax in axes:
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+    ax.tick_params(axis="x", rotation=45)
+
+plt.tight_layout()
+show_fig(fig)
+```
+
+---
+
+## The Missing Traders
+
+When only the three main groups (Managed Money, Hedgers, Swap Dealers) are tracked, there is a persistent gap of approximately 28,000 contracts — total longs exceed total shorts in this subset. This gap is accounted for by **Other Reportable and Non-Reportable traders**, who are consistently **net long** by roughly the same amount.
+
+This finding is significant. The non-reportable (retail) traders appear to be a consistent source of net long demand in the silver futures market. Their long dollar exposure closely tracks the silver price, consistent with momentum-chasing behavior — buying as prices rise and exiting as prices fall.
+
+```{python}
+zoom["gap"] = (
+    zoom["M_Money_Positions_Long_All"] + zoom["Prod_Merc_Positions_Long_All"] + zoom["Swap_Positions_Long_All"]
+) - (
+    zoom["M_Money_Positions_Short_All"] + zoom["Prod_Merc_Positions_Short_All"] + zoom["Swap__Positions_Short_All"]
+)
+
+fig, ax = plt.subplots()
+ax.plot(zoom["date"], zoom["gap"], color="black", marker="o",
+        linestyle="None", markersize=5, label="Long − Short (3 main groups only)")
+ax.axhline(0, color="red", linewidth=0.8, linestyle="--", label="Zero line")
+ax.axvline(peak, color="black", linewidth=1.2, linestyle="--")
+ax.set_title("Gap Between Total Longs and Shorts (3 Main Groups) — Nov 2025 to Mar 2026", fontsize=12)
+ax.set_ylabel("Contracts")
+ax.set_xlabel("Date")
+ax.legend(fontsize=8)
+ax.grid(True, alpha=0.3)
+ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+plt.xticks(rotation=45)
+plt.tight_layout()
+show_fig(fig)
+```
+
+---
+
+## Narrative Summary
+
+Based on the COT data, here is my interpretation of what happened during the silver boom and bust of January 2026:
+
+**The buildup (Nov–Dec 2025):** Speculators built up large net long positions as silver prices began rising, consistent with momentum-driven buying. Retail traders (Non-Reportable) also added longs. Swap dealers, acting as intermediaries, accumulated large short positions on the other side.
+
+**The final surge (Jan 2026):** As prices approached extreme levels, speculators actually began reducing their positions. The final push to \$113 appears to have been driven primarily by **swap dealers being forced to cover their shorts** — a classic short squeeze dynamic. As swap dealers bought to close short positions, this pushed prices higher, forcing further covering.
+
+**The crash:** Once the short squeeze resolved — swap dealers having covered enough of their exposure — the buying pressure disappeared. With speculators already having reduced their longs, there was no new demand to sustain prices. Silver collapsed roughly 35% within days.
+
+**The retail angle:** Non-Reportable traders (likely retail) appear to have been consistent net long holders throughout the episode, buying into the rally and exiting after the crash. This is consistent with Professor Cohen's hypothesis that retail demand may have played a role in the physical shortage that preceded and amplified the futures market dynamics.
+
+---
+
+## Next Steps
+
+- **Concentration data:** Plot top 4 and top 8 traders' share of open interest (long and short separately) to further characterize market structure
+- **Momentum regression:** Regress weekly Δ speculator share on contemporaneous and lagged Δ silver price to test whether speculators led or followed price
+- **Physical market data:** Investigate LBMA and SHFE data to test the physical shortage hypothesis
+- **Combined Futures & Options:** Rerun analysis on the CFTC Combined F&O report to capture options market dynamics

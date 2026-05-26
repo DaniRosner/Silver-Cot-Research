@@ -104,9 +104,9 @@ def fetch_silver_price(start: str, end: str) -> pd.DataFrame:
 # ── PLOT MAIN ─────────────────────────────────────────────────────────────────
 def plot_main(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
-    fig.suptitle("Silver (COMEX): Speculators vs Hedgers vs Price", fontsize=15, fontweight="bold", x=0.5)
+    fig.suptitle("Silver (COMEX): Net Positioning by Group vs Price", fontsize=15, fontweight="bold", x=0.5)
 
-    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff", "other": "#d4a017", "nonrept": "#2a9d8f"}
 
     # ── Panel 1: Silver Price ────────────────────────────────────────────────
     ax1 = axes[0]
@@ -120,12 +120,14 @@ def plot_main(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
 
     # ── Panel 2: Net Positions ───────────────────────────────────────────────
     ax2 = axes[1]
-    ax2.plot(cot["date"], cot["spec_net"],   color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators) Net")
-    ax2.plot(cot["date"], cot["hedger_net"], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers) Net")
-    ax2.plot(cot["date"], cot["swap_net"],   color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks) Net")
+    ax2.plot(cot["date"], cot["spec_net"],    color=colors["spec"],    linewidth=1.5, label="Managed Money (Speculators) Net")
+    ax2.plot(cot["date"], cot["hedger_net"],  color=colors["hedge"],   linewidth=1.5, label="Commercial (Hedgers) Net")
+    ax2.plot(cot["date"], cot["swap_net"],    color=colors["swap"],    linewidth=1.5, label="Swap Dealers (Big Banks) Net")
+    ax2.plot(cot["date"], cot["other_net"],   color=colors["other"],   linewidth=1.5, label="Other Reportable Net")
+    ax2.plot(cot["date"], cot["nonrept_net"], color=colors["nonrept"], linewidth=1.5, label="Non-Reportable Net")
     ax2.axhline(0, color="black", linewidth=0.7, linestyle="--")
     ax2.set_ylabel("Net Contracts", fontsize=10)
-    ax2.set_title("Net Positioning: Speculators vs Hedgers vs Swap Dealers", fontsize=11)
+    ax2.set_title("Net Positioning by Group", fontsize=11)
     ax2.legend(fontsize=9, loc="upper left")
     ax2.grid(True, alpha=0.3)
     ax2.tick_params(labelbottom=True)
@@ -180,7 +182,7 @@ def plot_oi(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     ax2.bar(cot["date"], cot["spec_share"], width=5, color=colors["spec"], alpha=0.7, label="Speculator Share %")
     ax2.set_ylabel("% of Open Interest", fontsize=10)
     ax2.set_title("Speculator Share of Total Open Interest", fontsize=11)
-    ax2.legend(fontsize=9)
+    ax2.legend(fontsize=9, loc="upper left")
     ax2.grid(True, alpha=0.3)
     ax2.tick_params(labelbottom=True)
     ax2b = ax2.twinx()
@@ -200,7 +202,7 @@ def plot_oi(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     ax3.plot(cot["date"], cot["swap_gross"],  color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
     ax3.set_ylabel("Contracts", fontsize=10)
     ax3.set_title("Gross Open Interest by Group\n(note: sums exceed total OI as longs & shorts are counted separately per group)", fontsize=11)
-    ax3.legend(fontsize=9)
+    ax3.legend(fontsize=9, loc="upper left")
     ax3.grid(True, alpha=0.3)
     ax3.tick_params(labelbottom=True)
     ax3b = ax3.twinx()
@@ -230,7 +232,7 @@ def plot_zoom_1(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
     fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026 (Price & Positioning)", fontsize=15, fontweight="bold", x=0.5)
 
-    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff", "other": "#d4a017", "nonrept": "#2a9d8f"}
 
     def add_price_overlay(ax):
         axb = ax.twinx()
@@ -257,13 +259,15 @@ def plot_zoom_1(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
 
     # ── Panel 2: Net Positioning ─────────────────────────────────────────────
     ax2 = axes[1]
-    ax2.plot(cot_zoom["date"], cot_zoom["spec_net"],   color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators) Net")
-    ax2.plot(cot_zoom["date"], cot_zoom["hedger_net"], color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers) Net")
-    ax2.plot(cot_zoom["date"], cot_zoom["swap_net"],   color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks) Net")
+    ax2.plot(cot_zoom["date"], cot_zoom["spec_net"],    color=colors["spec"],    marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators) Net")
+    ax2.plot(cot_zoom["date"], cot_zoom["hedger_net"],  color=colors["hedge"],   marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers) Net")
+    ax2.plot(cot_zoom["date"], cot_zoom["swap_net"],    color=colors["swap"],    marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks) Net")
+    ax2.plot(cot_zoom["date"], cot_zoom["other_net"],   color=colors["other"],   marker="o", linestyle="None", markersize=5, label="Other Reportable Net")
+    ax2.plot(cot_zoom["date"], cot_zoom["nonrept_net"], color=colors["nonrept"], marker="o", linestyle="None", markersize=5, label="Non-Reportable Net")
     ax2.axhline(0, color="black", linewidth=0.7, linestyle="--")
     add_peak_line(ax2)
     ax2.set_ylabel("Net Contracts", fontsize=10)
-    ax2.set_title("Net Positioning: Speculators vs Hedgers vs Swap Dealers (Weekly COT)", fontsize=11)
+    ax2.set_title("Net Positioning by Group (Weekly COT)", fontsize=11)
     ax2.legend(fontsize=9, loc="upper left")
     ax2.grid(True, alpha=0.3)
     ax2.tick_params(labelbottom=True)
@@ -289,7 +293,7 @@ def plot_zoom_2(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     fig, axes = plt.subplots(3, 1, figsize=(14, 14), sharex=True)
     fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026 (Open Interest Analysis)", fontsize=15, fontweight="bold", x=0.5)
 
-    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff", "other": "#d4a017", "nonrept": "#2a9d8f"}
 
     def add_price_overlay(ax):
         axb = ax.twinx()
@@ -370,9 +374,11 @@ def plot_dollar_exposure(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
 
     # Dollar exposure = net contracts × price × 5,000 oz per contract
     OZ_PER_CONTRACT = 5000
-    cot_merged["spec_dollar"]  = cot_merged["spec_net"]   * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["hedge_dollar"] = cot_merged["hedger_net"] * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["swap_dollar"]  = cot_merged["swap_net"]   * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["spec_dollar"]    = cot_merged["spec_net"]    * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["hedge_dollar"]   = cot_merged["hedger_net"]  * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["swap_dollar"]    = cot_merged["swap_net"]    * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["other_dollar"]   = cot_merged["other_net"]   * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["nonrept_dollar"] = cot_merged["nonrept_net"] * cot_merged["price"] * OZ_PER_CONTRACT
 
     # Zoom window
     cot_zoom   = cot_merged[(cot_merged["date"] >= "2025-11-01") & (cot_merged["date"] <= "2026-02-28")].copy()
@@ -382,7 +388,7 @@ def plot_dollar_exposure(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
     fig, axes = plt.subplots(2, 1, figsize=(14, 10))
     fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026 (Dollar Exposure by Group)", fontsize=15, fontweight="bold", x=0.5)
 
-    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff", "other": "#d4a017", "nonrept": "#2a9d8f"}
 
     def add_price_overlay(ax):
         axb = ax.twinx()
@@ -397,9 +403,11 @@ def plot_dollar_exposure(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
 
     # ── Panel 1: Full range dollar exposure ──────────────────────────────────
     ax1 = axes[0]
-    ax1.plot(cot_merged["date"], cot_merged["spec_dollar"]  / 1e9, color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
-    ax1.plot(cot_merged["date"], cot_merged["hedge_dollar"] / 1e9, color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
-    ax1.plot(cot_merged["date"], cot_merged["swap_dollar"]  / 1e9, color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax1.plot(cot_merged["date"], cot_merged["spec_dollar"]    / 1e9, color=colors["spec"],    linewidth=1.5, label="Managed Money (Speculators)")
+    ax1.plot(cot_merged["date"], cot_merged["hedge_dollar"]   / 1e9, color=colors["hedge"],   linewidth=1.5, label="Commercial (Hedgers)")
+    ax1.plot(cot_merged["date"], cot_merged["swap_dollar"]    / 1e9, color=colors["swap"],    linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax1.plot(cot_merged["date"], cot_merged["other_dollar"]   / 1e9, color=colors["other"],   linewidth=1.5, label="Other Reportable")
+    ax1.plot(cot_merged["date"], cot_merged["nonrept_dollar"] / 1e9, color=colors["nonrept"], linewidth=1.5, label="Non-Reportable")
     ax1.axhline(0, color="black", linewidth=0.7, linestyle="--")
     ax1.set_ylabel("Net Dollar Exposure (USD Billions)", fontsize=10)
     ax1.set_title("Net Dollar Exposure by Group (Full Range)", fontsize=11)
@@ -412,9 +420,11 @@ def plot_dollar_exposure(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure:
 
     # ── Panel 2: Zoom dollar exposure (weekly dots) ───────────────────────────
     ax2 = axes[1]
-    ax2.plot(cot_zoom["date"], cot_zoom["spec_dollar"]  / 1e9, color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
-    ax2.plot(cot_zoom["date"], cot_zoom["hedge_dollar"] / 1e9, color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
-    ax2.plot(cot_zoom["date"], cot_zoom["swap_dollar"]  / 1e9, color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    ax2.plot(cot_zoom["date"], cot_zoom["spec_dollar"]    / 1e9, color=colors["spec"],    marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
+    ax2.plot(cot_zoom["date"], cot_zoom["hedge_dollar"]   / 1e9, color=colors["hedge"],   marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
+    ax2.plot(cot_zoom["date"], cot_zoom["swap_dollar"]    / 1e9, color=colors["swap"],    marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    ax2.plot(cot_zoom["date"], cot_zoom["other_dollar"]   / 1e9, color=colors["other"],   marker="o", linestyle="None", markersize=5, label="Other Reportable")
+    ax2.plot(cot_zoom["date"], cot_zoom["nonrept_dollar"] / 1e9, color=colors["nonrept"], marker="o", linestyle="None", markersize=5, label="Non-Reportable")
     ax2.axhline(0, color="black", linewidth=0.7, linestyle="--")
     add_peak_line(ax2)
     ax2.set_ylabel("Net Dollar Exposure (USD Billions)", fontsize=10)
@@ -445,17 +455,21 @@ def plot_dollar_exposure_ls_full(cot: pd.DataFrame, price: pd.DataFrame) -> plt.
     )
 
     OZ_PER_CONTRACT = 5000
-    cot_merged["spec_long_exp"]  = cot_merged[COLS["speculator_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["hedge_long_exp"] = cot_merged[COLS["commercial_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["swap_long_exp"]  = cot_merged[COLS["swap_long"]]        * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["spec_short_exp"]  = cot_merged[COLS["speculator_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["hedge_short_exp"] = cot_merged[COLS["commercial_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["swap_short_exp"]  = cot_merged[COLS["swap_short"]]       * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["spec_long_exp"]    = cot_merged[COLS["speculator_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["hedge_long_exp"]   = cot_merged[COLS["commercial_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["swap_long_exp"]    = cot_merged[COLS["swap_long"]]        * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["other_long_exp"]   = cot_merged[COLS["other_long"]]       * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["nonrept_long_exp"] = cot_merged[COLS["nonrept_long"]]     * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["spec_short_exp"]    = cot_merged[COLS["speculator_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["hedge_short_exp"]   = cot_merged[COLS["commercial_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["swap_short_exp"]    = cot_merged[COLS["swap_short"]]       * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["other_short_exp"]   = cot_merged[COLS["other_short"]]      * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["nonrept_short_exp"] = cot_merged[COLS["nonrept_short"]]    * cot_merged["price"] * OZ_PER_CONTRACT
 
     fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
     fig.suptitle("Silver (COMEX): Dollar Exposure by Long & Short — Full Range", fontsize=15, fontweight="bold", x=0.5)
 
-    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff", "other": "#d4a017", "nonrept": "#2a9d8f"}
 
     def add_price_overlay(ax):
         axb = ax.twinx()
@@ -467,9 +481,11 @@ def plot_dollar_exposure_ls_full(cot: pd.DataFrame, price: pd.DataFrame) -> plt.
 
     # ── Panel 1: Long Exposure ────────────────────────────────────────────────
     ax1 = axes[0]
-    ax1.plot(cot_merged["date"], cot_merged["spec_long_exp"]  / 1e9, color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
-    ax1.plot(cot_merged["date"], cot_merged["hedge_long_exp"] / 1e9, color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
-    ax1.plot(cot_merged["date"], cot_merged["swap_long_exp"]  / 1e9, color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax1.plot(cot_merged["date"], cot_merged["spec_long_exp"]    / 1e9, color=colors["spec"],    linewidth=1.5, label="Managed Money (Speculators)")
+    ax1.plot(cot_merged["date"], cot_merged["hedge_long_exp"]   / 1e9, color=colors["hedge"],   linewidth=1.5, label="Commercial (Hedgers)")
+    ax1.plot(cot_merged["date"], cot_merged["swap_long_exp"]    / 1e9, color=colors["swap"],    linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax1.plot(cot_merged["date"], cot_merged["other_long_exp"]   / 1e9, color=colors["other"],   linewidth=1.5, label="Other Reportable")
+    ax1.plot(cot_merged["date"], cot_merged["nonrept_long_exp"] / 1e9, color=colors["nonrept"], linewidth=1.5, label="Non-Reportable")
     ax1.set_ylabel("Long Dollar Exposure (USD Billions)", fontsize=10)
     ax1.set_title("Long Dollar Exposure by Group (Full Range)", fontsize=11)
     ax1.legend(fontsize=9, loc="upper left")
@@ -480,9 +496,11 @@ def plot_dollar_exposure_ls_full(cot: pd.DataFrame, price: pd.DataFrame) -> plt.
 
     # ── Panel 2: Short Exposure ───────────────────────────────────────────────
     ax2 = axes[1]
-    ax2.plot(cot_merged["date"], cot_merged["spec_short_exp"]  / 1e9, color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
-    ax2.plot(cot_merged["date"], cot_merged["hedge_short_exp"] / 1e9, color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
-    ax2.plot(cot_merged["date"], cot_merged["swap_short_exp"]  / 1e9, color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax2.plot(cot_merged["date"], cot_merged["spec_short_exp"]    / 1e9, color=colors["spec"],    linewidth=1.5, label="Managed Money (Speculators)")
+    ax2.plot(cot_merged["date"], cot_merged["hedge_short_exp"]   / 1e9, color=colors["hedge"],   linewidth=1.5, label="Commercial (Hedgers)")
+    ax2.plot(cot_merged["date"], cot_merged["swap_short_exp"]    / 1e9, color=colors["swap"],    linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax2.plot(cot_merged["date"], cot_merged["other_short_exp"]   / 1e9, color=colors["other"],   linewidth=1.5, label="Other Reportable")
+    ax2.plot(cot_merged["date"], cot_merged["nonrept_short_exp"] / 1e9, color=colors["nonrept"], linewidth=1.5, label="Non-Reportable")
     ax2.set_ylabel("Short Dollar Exposure (USD Billions)", fontsize=10)
     ax2.set_title("Short Dollar Exposure by Group (Full Range)", fontsize=11)
     ax2.legend(fontsize=9, loc="upper left")
@@ -516,12 +534,16 @@ def plot_dollar_exposure_ls_zoom(cot: pd.DataFrame, price: pd.DataFrame) -> plt.
     )
 
     OZ_PER_CONTRACT = 5000
-    cot_merged["spec_long_exp"]  = cot_merged[COLS["speculator_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["hedge_long_exp"] = cot_merged[COLS["commercial_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["swap_long_exp"]  = cot_merged[COLS["swap_long"]]        * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["spec_short_exp"]  = cot_merged[COLS["speculator_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["hedge_short_exp"] = cot_merged[COLS["commercial_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
-    cot_merged["swap_short_exp"]  = cot_merged[COLS["swap_short"]]       * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["spec_long_exp"]    = cot_merged[COLS["speculator_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["hedge_long_exp"]   = cot_merged[COLS["commercial_long"]]  * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["swap_long_exp"]    = cot_merged[COLS["swap_long"]]        * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["other_long_exp"]   = cot_merged[COLS["other_long"]]       * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["nonrept_long_exp"] = cot_merged[COLS["nonrept_long"]]     * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["spec_short_exp"]    = cot_merged[COLS["speculator_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["hedge_short_exp"]   = cot_merged[COLS["commercial_short"]] * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["swap_short_exp"]    = cot_merged[COLS["swap_short"]]       * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["other_short_exp"]   = cot_merged[COLS["other_short"]]      * cot_merged["price"] * OZ_PER_CONTRACT
+    cot_merged["nonrept_short_exp"] = cot_merged[COLS["nonrept_short"]]    * cot_merged["price"] * OZ_PER_CONTRACT
 
     cot_zoom   = cot_merged[(cot_merged["date"] >= "2025-11-01") & (cot_merged["date"] <= "2026-02-28")].copy()
     price_zoom = price[(price.index >= "2025-11-01") & (price.index <= "2026-02-28")]
@@ -530,7 +552,7 @@ def plot_dollar_exposure_ls_zoom(cot: pd.DataFrame, price: pd.DataFrame) -> plt.
     fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
     fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026 (Dollar Exposure by Long & Short)", fontsize=15, fontweight="bold", x=0.5)
 
-    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff", "other": "#d4a017", "nonrept": "#2a9d8f"}
 
     def add_price_overlay(ax):
         axb = ax.twinx()
@@ -545,9 +567,11 @@ def plot_dollar_exposure_ls_zoom(cot: pd.DataFrame, price: pd.DataFrame) -> plt.
 
     # ── Panel 1: Long Exposure Zoom ───────────────────────────────────────────
     ax1 = axes[0]
-    ax1.plot(cot_zoom["date"], cot_zoom["spec_long_exp"]  / 1e9, color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
-    ax1.plot(cot_zoom["date"], cot_zoom["hedge_long_exp"] / 1e9, color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
-    ax1.plot(cot_zoom["date"], cot_zoom["swap_long_exp"]  / 1e9, color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    ax1.plot(cot_zoom["date"], cot_zoom["spec_long_exp"]    / 1e9, color=colors["spec"],    marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
+    ax1.plot(cot_zoom["date"], cot_zoom["hedge_long_exp"]   / 1e9, color=colors["hedge"],   marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
+    ax1.plot(cot_zoom["date"], cot_zoom["swap_long_exp"]    / 1e9, color=colors["swap"],    marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    ax1.plot(cot_zoom["date"], cot_zoom["other_long_exp"]   / 1e9, color=colors["other"],   marker="o", linestyle="None", markersize=5, label="Other Reportable")
+    ax1.plot(cot_zoom["date"], cot_zoom["nonrept_long_exp"] / 1e9, color=colors["nonrept"], marker="o", linestyle="None", markersize=5, label="Non-Reportable")
     add_peak_line(ax1)
     ax1.set_ylabel("Long Dollar Exposure (USD Billions)", fontsize=10)
     ax1.set_title("Long Dollar Exposure by Group (Weekly COT)", fontsize=11)
@@ -559,9 +583,11 @@ def plot_dollar_exposure_ls_zoom(cot: pd.DataFrame, price: pd.DataFrame) -> plt.
 
     # ── Panel 2: Short Exposure Zoom ──────────────────────────────────────────
     ax2 = axes[1]
-    ax2.plot(cot_zoom["date"], cot_zoom["spec_short_exp"]  / 1e9, color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
-    ax2.plot(cot_zoom["date"], cot_zoom["hedge_short_exp"] / 1e9, color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
-    ax2.plot(cot_zoom["date"], cot_zoom["swap_short_exp"]  / 1e9, color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    ax2.plot(cot_zoom["date"], cot_zoom["spec_short_exp"]    / 1e9, color=colors["spec"],    marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
+    ax2.plot(cot_zoom["date"], cot_zoom["hedge_short_exp"]   / 1e9, color=colors["hedge"],   marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
+    ax2.plot(cot_zoom["date"], cot_zoom["swap_short_exp"]    / 1e9, color=colors["swap"],    marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    ax2.plot(cot_zoom["date"], cot_zoom["other_short_exp"]   / 1e9, color=colors["other"],   marker="o", linestyle="None", markersize=5, label="Other Reportable")
+    ax2.plot(cot_zoom["date"], cot_zoom["nonrept_short_exp"] / 1e9, color=colors["nonrept"], marker="o", linestyle="None", markersize=5, label="Non-Reportable")
     add_peak_line(ax2)
     ax2.set_ylabel("Short Dollar Exposure (USD Billions)", fontsize=10)
     ax2.set_title("Short Dollar Exposure by Group (Weekly COT)", fontsize=11)
@@ -585,7 +611,7 @@ def plot_longs_shorts_full(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure
     fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
     fig.suptitle("Silver (COMEX): Long & Short Positions by Group (Full Range)", fontsize=15, fontweight="bold", x=0.5)
 
-    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff", "other": "#d4a017", "nonrept": "#2a9d8f"}
 
     def add_price_overlay(ax):
         axb = ax.twinx()
@@ -597,9 +623,11 @@ def plot_longs_shorts_full(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure
 
     # ── Panel 1: Longs ────────────────────────────────────────────────────────
     ax1 = axes[0]
-    ax1.plot(cot["date"], cot[COLS["speculator_long"]], color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
-    ax1.plot(cot["date"], cot[COLS["commercial_long"]], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
-    ax1.plot(cot["date"], cot[COLS["swap_long"]],       color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax1.plot(cot["date"], cot[COLS["speculator_long"]], color=colors["spec"],    linewidth=1.5, label="Managed Money (Speculators)")
+    ax1.plot(cot["date"], cot[COLS["commercial_long"]], color=colors["hedge"],   linewidth=1.5, label="Commercial (Hedgers)")
+    ax1.plot(cot["date"], cot[COLS["swap_long"]],       color=colors["swap"],    linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax1.plot(cot["date"], cot[COLS["other_long"]],      color=colors["other"],   linewidth=1.5, label="Other Reportable")
+    ax1.plot(cot["date"], cot[COLS["nonrept_long"]],    color=colors["nonrept"], linewidth=1.5, label="Non-Reportable")
     ax1.set_ylabel("Contracts", fontsize=10)
     ax1.set_title("Long Positions by Group", fontsize=11)
     ax1.legend(fontsize=9, loc="upper left")
@@ -610,9 +638,11 @@ def plot_longs_shorts_full(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure
 
     # ── Panel 2: Shorts ───────────────────────────────────────────────────────
     ax2 = axes[1]
-    ax2.plot(cot["date"], cot[COLS["speculator_short"]], color=colors["spec"],  linewidth=1.5, label="Managed Money (Speculators)")
-    ax2.plot(cot["date"], cot[COLS["commercial_short"]], color=colors["hedge"], linewidth=1.5, label="Commercial (Hedgers)")
-    ax2.plot(cot["date"], cot[COLS["swap_short"]],       color=colors["swap"],  linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax2.plot(cot["date"], cot[COLS["speculator_short"]], color=colors["spec"],    linewidth=1.5, label="Managed Money (Speculators)")
+    ax2.plot(cot["date"], cot[COLS["commercial_short"]], color=colors["hedge"],   linewidth=1.5, label="Commercial (Hedgers)")
+    ax2.plot(cot["date"], cot[COLS["swap_short"]],       color=colors["swap"],    linewidth=1.5, label="Swap Dealers (Big Banks)")
+    ax2.plot(cot["date"], cot[COLS["other_short"]],      color=colors["other"],   linewidth=1.5, label="Other Reportable")
+    ax2.plot(cot["date"], cot[COLS["nonrept_short"]],    color=colors["nonrept"], linewidth=1.5, label="Non-Reportable")
     ax2.set_ylabel("Contracts", fontsize=10)
     ax2.set_title("Short Positions by Group", fontsize=11)
     ax2.legend(fontsize=9, loc="upper left")
@@ -640,7 +670,7 @@ def plot_longs_shorts_zoom(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure
     fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
     fig.suptitle("Silver (COMEX): Zoom — Nov 2025 to Feb 2026 (Longs & Shorts by Group)", fontsize=15, fontweight="bold", x=0.5)
 
-    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff"}
+    colors = {"spec": "#e05c00", "hedge": "#0a5c91", "price": "#2a9d2a", "swap": "#8b00ff", "other": "#d4a017", "nonrept": "#2a9d8f"}
 
     def add_price_overlay(ax):
         axb = ax.twinx()
@@ -655,9 +685,11 @@ def plot_longs_shorts_zoom(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure
 
     # ── Panel 1: Longs ────────────────────────────────────────────────────────
     ax1 = axes[0]
-    ax1.plot(cot_zoom["date"], cot_zoom[COLS["speculator_long"]], color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
-    ax1.plot(cot_zoom["date"], cot_zoom[COLS["commercial_long"]], color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
-    ax1.plot(cot_zoom["date"], cot_zoom[COLS["swap_long"]],       color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    ax1.plot(cot_zoom["date"], cot_zoom[COLS["speculator_long"]], color=colors["spec"],    marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
+    ax1.plot(cot_zoom["date"], cot_zoom[COLS["commercial_long"]], color=colors["hedge"],   marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
+    ax1.plot(cot_zoom["date"], cot_zoom[COLS["swap_long"]],       color=colors["swap"],    marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    ax1.plot(cot_zoom["date"], cot_zoom[COLS["other_long"]],      color=colors["other"],   marker="o", linestyle="None", markersize=5, label="Other Reportable")
+    ax1.plot(cot_zoom["date"], cot_zoom[COLS["nonrept_long"]],    color=colors["nonrept"], marker="o", linestyle="None", markersize=5, label="Non-Reportable")
     add_peak_line(ax1)
     ax1.set_ylabel("Contracts", fontsize=10)
     ax1.set_title("Long Positions by Group (Weekly COT)", fontsize=11)
@@ -669,9 +701,11 @@ def plot_longs_shorts_zoom(cot: pd.DataFrame, price: pd.DataFrame) -> plt.Figure
 
     # ── Panel 2: Shorts ───────────────────────────────────────────────────────
     ax2 = axes[1]
-    ax2.plot(cot_zoom["date"], cot_zoom[COLS["speculator_short"]], color=colors["spec"],  marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
-    ax2.plot(cot_zoom["date"], cot_zoom[COLS["commercial_short"]], color=colors["hedge"], marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
-    ax2.plot(cot_zoom["date"], cot_zoom[COLS["swap_short"]],       color=colors["swap"],  marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    ax2.plot(cot_zoom["date"], cot_zoom[COLS["speculator_short"]], color=colors["spec"],    marker="o", linestyle="None", markersize=5, label="Managed Money (Speculators)")
+    ax2.plot(cot_zoom["date"], cot_zoom[COLS["commercial_short"]], color=colors["hedge"],   marker="o", linestyle="None", markersize=5, label="Commercial (Hedgers)")
+    ax2.plot(cot_zoom["date"], cot_zoom[COLS["swap_short"]],       color=colors["swap"],    marker="o", linestyle="None", markersize=5, label="Swap Dealers (Big Banks)")
+    ax2.plot(cot_zoom["date"], cot_zoom[COLS["other_short"]],      color=colors["other"],   marker="o", linestyle="None", markersize=5, label="Other Reportable")
+    ax2.plot(cot_zoom["date"], cot_zoom[COLS["nonrept_short"]],    color=colors["nonrept"], marker="o", linestyle="None", markersize=5, label="Non-Reportable")
     add_peak_line(ax2)
     ax2.set_ylabel("Contracts", fontsize=10)
     ax2.set_title("Short Positions by Group (Weekly COT)", fontsize=11)
@@ -712,9 +746,15 @@ def export_csv(cot: pd.DataFrame, price: pd.DataFrame):
     merged["hedge_long_exposure"]  = merged["Prod_Merc_Positions_Long_All"]  * merged["price"] * OZ_PER_CONTRACT
     merged["hedge_short_exposure"] = merged["Prod_Merc_Positions_Short_All"] * merged["price"] * OZ_PER_CONTRACT
     merged["hedge_net_exposure"]   = merged["hedger_net"]                    * merged["price"] * OZ_PER_CONTRACT
-    merged["swap_long_exposure"]   = merged["Swap_Positions_Long_All"]       * merged["price"] * OZ_PER_CONTRACT
-    merged["swap_short_exposure"]  = merged["Swap__Positions_Short_All"]     * merged["price"] * OZ_PER_CONTRACT
-    merged["swap_net_exposure"]    = merged["swap_net"]                      * merged["price"] * OZ_PER_CONTRACT
+    merged["swap_long_exposure"]      = merged["Swap_Positions_Long_All"]        * merged["price"] * OZ_PER_CONTRACT
+    merged["swap_short_exposure"]     = merged["Swap__Positions_Short_All"]      * merged["price"] * OZ_PER_CONTRACT
+    merged["swap_net_exposure"]       = merged["swap_net"]                       * merged["price"] * OZ_PER_CONTRACT
+    merged["other_long_exposure"]     = merged["Other_Rept_Positions_Long_All"]  * merged["price"] * OZ_PER_CONTRACT
+    merged["other_short_exposure"]    = merged["Other_Rept_Positions_Short_All"] * merged["price"] * OZ_PER_CONTRACT
+    merged["other_net_exposure"]      = merged["other_net"]                      * merged["price"] * OZ_PER_CONTRACT
+    merged["nonrept_long_exposure"]   = merged["NonRept_Positions_Long_All"]     * merged["price"] * OZ_PER_CONTRACT
+    merged["nonrept_short_exposure"]  = merged["NonRept_Positions_Short_All"]    * merged["price"] * OZ_PER_CONTRACT
+    merged["nonrept_net_exposure"]    = merged["nonrept_net"]                    * merged["price"] * OZ_PER_CONTRACT
     merged.to_csv("silver_cot_data.csv", index=False)
     print(f"Data exported → silver_cot_data.csv  ({len(merged)} rows)")
 
