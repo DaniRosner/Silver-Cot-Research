@@ -7,3 +7,7 @@ __pycache__/
 .DS_Store
 .obsidian/
 Silver COT Charts/
+node_modules/
+dist/
+node_modules/
+dist/
